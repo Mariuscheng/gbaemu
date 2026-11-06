@@ -1,0 +1,37 @@
+# --- 使用者自備 ROM／BIOS（唔入版控）---
+rom/*
+!rom/README.md
+*.gba
+*.sav
+*.srm
+gba_bios.bin
+
+# --- 本機開發素材（ROM、test-rom、mGBA 證據；唔隨 repo 提供）---
+test-rom/
+ref_*.bmp
+
+# --- Python ---
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+dist_native/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- 原生建置產物 ---
+*.pyd
+*.so
+*.dll
+target/
+crates/*/target/
+
+# --- 編輯器／OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

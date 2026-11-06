@@ -111,6 +111,8 @@ finally:
 退回 headless。視窗接受方向鍵／Z／X／Enter／Backspace／A／S，關閉視窗會讓
 `tick()` 回傳 False。電池存檔寫在 ROM 旁邊的 `<rom>.sav`（SRAM 32 KiB／
 Flash 64 KiB／128 KiB／EEPROM 512 B／8 KiB 自動偵測），下次開啟自動載入。
+**只有遊戲真正寫入備份記憶體（手動存檔）時才會更新 `.sav`**；純粹開遊戲
+唔會改動現有存檔。需要強制寫回可呼叫 `app.save_battery()`。
 
 ### CLI
 

@@ -984,3 +984,42 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
 - 現行測試：`tests/gbaemu`（303 collected）＋`tests/reference`；
   legacy 測試／`pygba` 已喺 lab。
 - 發佈前仍要：補 `LICENSE`、設定 GitHub remote（`git remote add origin ...`）。
+
+## LeafGreen 開場「主角／Professor Oak」不見（BG2 affine，2026-11-06）
+
+- **現象**：LeafGreen 開場 Oak 講解畫面只見到 Bulbasaur 同文字，畫面左邊的
+  Professor Oak 完全消失（實機／mGBA 有）。
+- **根因**：Oak 係用 **BG2 affine layer** 畫（唔係 OBJ）。遊戲開機執行
+  SWI 0x01 RegisterRamReset（flags 0x80）重設 IO，BIOS 的復位值係
+  `BG2PA=BG2PD=BG3PA=BG3PD=0x0100`（identity matrix）；我哋 HLE 將
+  0x000..0x060 的 IO **全部清零**，affine matrix 變成 0 → BG2 所有 pixel
+  取樣同一個 texel（透明）→ Oak 消失。mGBA `GBASwi16` case 0x01 同
+  `GBAIOInit` 都係設 identity。
+- **修正**：
+  - `Cpu::hle_swi` case 0x01（flags 0x80）同 Python
+    `hle/swi_impl.py::_register_ram_reset`：清零 IO 之後補回
+    BG2/BG3 PA/PD = 0x0100。
+  - `Bus::apply_post_boot`（Rust）＋`hle/postboot.py`（Python）：
+    HLE 開機亦設 identity，對齊 BIOS／mGBA `GBAIOInit`。
+- **驗證**：用 mGBA 0.10.5 core 跑同一輸入腳本（START@1800、之後每 60
+  frames 按 A），frame 3304 與我哋輸出 **逐 pixel 相同**（mean diff 0、
+  diff>30 像素 0）。修正前同一 frame 有 2286 個 pixel 差（正正係 Oak
+  的剪影）。
+- **測試**：`test_register_ram_reset_sets_affine_identity`（Rust＋Python，
+  用 render 驗證 identity default 真係畫到 affine BG）、
+  `post_boot_sets_affine_identity`（Rust）；pytest 306 passed、cargo 106 passed。
+
+## 電池存檔：唔再「自動 save」（2026-11-06）
+
+- **現象／要求**：只係開遊戲、冇喺遊戲入面手動存檔，關掉時都會寫
+  `<rom>.sav`（甚至建立新檔）；用戶要求「不要自動 save，因為有些遊戲要
+  手動 save」。
+- **修正**：`NativeEmulator`／`Emulator` 新增 `battery_dirty`（同載入／上次
+  寫回比較 save media bytes）。`GbaApp.stop()` 只在 dirty 時才 flush；純粹
+  遊玩唔會改動／建立 `.sav`。另外新增 `GbaApp.save_battery()` 供明確寫回。
+- **驗證**：Dr. Mario（EEPROM 8K）跑 60 frames 冇存檔 → `battery_dirty`
+  False、`.sav` mtime／hash 完全不變；遊戲寫過 save media 後 dirty True，
+  stop 會寫檔。
+- **測試**：`test_gbaapp_stop_skips_sav_when_game_did_not_save`、
+  `test_battery_dirty_tracks_save_writes`（native）、
+  `test_python_battery_dirty_tracks_save_writes`（Python）。

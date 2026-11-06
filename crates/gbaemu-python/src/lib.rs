@@ -138,6 +138,11 @@ impl NativeCore {
         self.core.framebuffer().to_vec()
     }
 
+    /// 用目前 VRAM／IO／OAM 狀態重畫整個 frame（snapshot 還原後或診斷用）。
+    fn render_now(&mut self) {
+        self.core.render_now();
+    }
+
     fn save_state(&self) -> Vec<u8> {
         self.core.save_state_with_hashes(self.rom_sha, self.config_sha)
     }

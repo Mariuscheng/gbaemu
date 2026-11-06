@@ -211,3 +211,26 @@ def test_gbaapp_stop_flushes_battery_save(tmp_path):
     assert sav.stat().st_size == 0x8000
     assert sav.read_bytes()[0] == 0x77
     assert sav.read_bytes()[0x10] == 0x88
+
+
+def test_gbaapp_stop_skips_sav_when_game_did_not_save(tmp_path):
+    """冇喺遊戲入面存檔就唔應該自動改動／建立 .sav。"""
+
+    from gbaemu.rl import GbaApp
+
+    path = _rom(tmp_path / "untouched.gba", b"SRAM_V113")
+    app = GbaApp(str(path), window="null")
+    assert app.emu.battery_dirty is False
+    app.stop()
+
+    assert not Path(str(path) + ".sav").exists()
+
+
+def test_battery_dirty_tracks_save_writes(tmp_path):
+    emu = NativeEmulator.from_rom(_rom(tmp_path / "dirty.gba", b"SRAM_V113"))
+    assert emu.battery_dirty is False
+    emu.memory.write_u8(0x0E000000, 0x12)
+    assert emu.battery_dirty is True
+    emu.cartridge_flush_to_disk()
+    assert emu.battery_dirty is False
+    emu.close()

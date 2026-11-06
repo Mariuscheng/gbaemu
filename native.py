@@ -55,6 +55,7 @@ class NativeEmulator:
             Path(str(self._rom_path) + ".sav") if self._rom_path is not None else None
         )
         self._load_save_file()
+        self._save_baseline = bytes(self._core.save_ram())
         from .emulator import InputPort
 
         self.input = InputPort()
@@ -160,9 +161,11 @@ class NativeEmulator:
             raise GbaEmuError("cartridge 沒有 save 媒體")
         if self._save_path is None:
             raise GbaEmuError("cartridge 沒有 ROM 路徑，無法寫回磁碟")
+        data = bytes(self._core.save_ram())
         temporary = self._save_path.with_name(self._save_path.name + ".tmp")
-        temporary.write_bytes(bytes(self._core.save_ram()))
+        temporary.write_bytes(data)
         os.replace(temporary, self._save_path)
+        self._save_baseline = data
 
     def _load_save_file(self) -> None:
         """若 ``<rom>.sav`` 存在且大小相符，載入備份記憶體。"""
@@ -174,6 +177,16 @@ class NativeEmulator:
             self._core.load_save_ram(data)
         except ValueError as exc:
             logger.warning("save 檔大小不符（%s），忽略 %s", exc, self._save_path)
+
+    @property
+    def battery_dirty(self) -> bool:
+        """備份記憶體自載入／上次寫回後有無被遊戲寫過。
+
+        ``GbaApp.stop()`` 只在 dirty 時才寫 ``.sav``，所以「開遊戲但冇喺遊戲
+        入面存檔」唔會無端改動／建立電池存檔。
+        """
+
+        return bytes(self._core.save_ram()) != self._save_baseline
 
     @property
     def save_path(self) -> Path | None:

@@ -2526,6 +2526,11 @@ impl Cpu {
                     for offset in (0x000u32..0x060).chain(0x0A9u32..0x120).chain(0x200u32..0x20A) {
                         bus.write8(0x0400_0000 + offset, 0);
                     }
+                    // BIOS RegisterRamReset 的 IO 復位值：BG2/BG3 affine matrix
+                    // = identity（唔係 0）。mGBA `GBASwi16` case 0x01 同款。
+                    for offset in [0x20u32, 0x26, 0x30, 0x36] {
+                        bus.write16(0x0400_0000 + offset, 0x0100);
+                    }
                     bus.timer_counter = [0; 4];
                     bus.timer_reload = [0; 4];
                     bus.timer_control = [0; 4];

@@ -265,6 +265,32 @@ def test_register_ram_reset(tmp_path):
     assert emu.memory.read_u16(0x04000000) == 0x0080  # forced blank
 
 
+def test_register_ram_reset_sets_affine_identity(tmp_path):
+    """BIOS 的 IO 復位值：BG2/BG3 affine matrix = identity（PA=PD=0x0100）。
+
+    LeafGreen 開機用 SWI 0x01（flags 0x80）重設 IO，之後靠呢個預設用 BG2
+    畫 Professor Oak；之前我哋清零 affine register → BG2 只剩一個透明 texel。
+    """
+
+    emu = _emu(tmp_path)
+    emu.memory.write_u16(0x04000020, 0)  # 先破壞 identity
+    emu.memory.write_u16(0x04000026, 0)
+    _set(emu, 0, 0x80)
+    _call(emu, 0x01)
+
+    # 用 render 驗證：mode 2 + BG2（128x128 affine），唔寫 BG2PA/PD。
+    emu.memory.write_u16(0x04000000, 0x0002 | 0x0400)  # Mode 2 + BG2
+    emu.memory.write_u16(0x0400000C, 0x0084)  # BG2CNT: 8bpp + char base 1
+    for offset in range(0x40):
+        emu.memory.write_u8(0x06004000 + offset, 0x09)
+    emu.memory.write_u8(0x06000000, 0)  # tile 0
+    emu.memory.write_u16(0x05000000 + 9 * 2, 0x03E0)
+    emu._bus.ppu.render(emu._bus.vram, emu._framebuffer)
+    frame = emu.video.read_frame()
+    assert frame[:3] == bytes((0, 255, 0))
+    assert frame[(100 * 240 + 100) * 3 : (100 * 240 + 100) * 3 + 3] == bytes((0, 255, 0))
+
+
 def test_halt_and_intr_wait(tmp_path):
     emu = _emu(tmp_path)
     _call(emu, 0x02)

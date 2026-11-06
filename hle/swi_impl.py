@@ -109,6 +109,10 @@ def _register_ram_reset(cpu) -> None:
             range(0x200, 0x20A)
         ):
             bus.io_registers.write8(offset, 0)
+        # BIOS RegisterRamReset 的 IO 復位值：BG2/BG3 affine matrix = identity
+        # （唔係 0）。mGBA `GBASwi16` case 0x01 同款。
+        for offset in (0x20, 0x26, 0x30, 0x36):
+            bus.write16(0x04000000 + offset, 0x0100)
         bus.timers.reset()
         bus.dma.reset()
     # 真 BIOS 會進 forced blank

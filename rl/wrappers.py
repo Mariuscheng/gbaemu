@@ -317,7 +317,9 @@ class GbaApp:
             return
         self._stopped = True
         self._closed = True
-        if save:
+        # 只有在遊戲真正寫過備份記憶體（存檔）時才寫 .sav；純粹開遊戲、
+        # 冇喺遊戲入面手動存檔，唔會改動／建立電池存檔。
+        if save and getattr(self._emu, "battery_dirty", True):
             try:
                 self._emu.cartridge_flush_to_disk()
             except (GbaEmuError, NotImplementedError):
@@ -333,6 +335,11 @@ class GbaApp:
             self._audio_ok = False
             self._pg.quit()
             self._pg = None
+
+    def save_battery(self) -> None:
+        """明確寫回電池存檔 ``<rom>.sav``（唔理 dirty 狀態）。"""
+
+        self._emu.cartridge_flush_to_disk()
 
     # -- 輸入 ------------------------------------------------------------
     def button(self, name: str, press: bool = True) -> None:

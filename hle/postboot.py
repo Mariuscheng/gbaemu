@@ -50,6 +50,12 @@ def apply_post_boot(state: PostBootState, cpu, bus) -> bool:
 
     cpu.apply_post_boot(state)
 
+    # BIOS 開機 default：BG2/BG3 affine matrix = identity（PA=PD=0x0100）。
+    # 冇寫呢兩個 register 的遊戲（例如 LeafGreen 用 BG2 畫 Oak）靠 BIOS
+    # 留低嘅預設；mGBA GBAIOInit 同款。
+    for offset in (0x20, 0x26, 0x30, 0x36):
+        bus.write_u16(0x04000000 + offset, 0x0100)
+
     header = bytearray()
     for index in range(state.header_size):
         value = bus.peek_u8(state.header_src + index) & 0xFF

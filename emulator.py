@@ -89,6 +89,9 @@ class Emulator:
         self._rom_sha256 = hashlib.sha256(self._cartridge.rom_bytes).digest()
         if rom_path is not None:
             self._load_save_file(Path(rom_path))
+        self._save_baseline = (
+            self._cartridge.save.export() if self._cartridge.save is not None else None
+        )
         self._bios_bytes = self._load_bios(config)
 
         # HLE 模式仍然可以載入真實 BIOS 內容（config 允許 HLE + bios_path），
@@ -385,8 +388,18 @@ class Emulator:
             raise GbaEmuError("cartridge 沒有 ROM 路徑，無法寫回磁碟")
         target = Path(str(self._rom_path) + ".sav")
         temporary = target.with_name(target.name + ".tmp")
-        temporary.write_bytes(self._cartridge.save.export())
+        data = self._cartridge.save.export()
+        temporary.write_bytes(data)
         os.replace(temporary, target)
+        self._save_baseline = data
+
+    @property
+    def battery_dirty(self) -> bool:
+        """備份記憶體自載入／上次寫回後有無被遊戲寫過。"""
+
+        if self._cartridge.save is None:
+            return False
+        return self._cartridge.save.export() != self._save_baseline
 
     # ------------------------------------------------------------------
     # 狀態

@@ -1149,6 +1149,12 @@ impl Bus {
         self.ewram[..header_len].copy_from_slice(&self.rom[..header_len]);
         self.write32(0x0300_7FF8, 0);
         self.write32(0x0300_7FFC, 0);
+        // BIOS 開機 default：BG2/BG3 affine matrix = identity（PA=PD=0x0100）。
+        // 冇寫呢兩個 register 的遊戲（例如 LeafGreen 用 BG2 畫 Oak）靠 BIOS
+        // 留低嘅預設；mGBA GBAIOInit 同款。
+        for offset in [0x20usize, 0x26, 0x30, 0x36] {
+            self.io[offset..offset + 2].copy_from_slice(&0x0100u16.to_le_bytes());
+        }
         // HLE 開機等價於 mGBA hleBios 跑完之後離開 BIOS：biosPrefetch 係
         // 最後 prefetch 嘅 word 0xE3A02004（mov r2,#4）。非 BIOS 程式讀
         // BIOS 視窗時會見到呢個值（suite「BIOS load」）。

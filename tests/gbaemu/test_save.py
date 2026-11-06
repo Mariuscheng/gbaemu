@@ -184,6 +184,19 @@ def test_flush_and_autoload_save_file(tmp_path):
     assert emu2.memory.read_u8(0x0E000000) == 0x99
 
 
+def test_python_battery_dirty_tracks_save_writes(tmp_path):
+    path = tmp_path / "dirty.gba"
+    path.write_bytes(_program_rom(SRAM_ID, arm_words(0xEAFFFFFE)))
+    emu = Emulator.from_rom(
+        path, config=EmulatorConfig(boot_mode=BootMode.TEST_ROM_ONLY)
+    )
+    assert emu.battery_dirty is False
+    emu.memory.write_u8(0x0E000000, 0x12)
+    assert emu.battery_dirty is True
+    emu.cartridge_flush_to_disk()
+    assert emu.battery_dirty is False
+
+
 def test_save_snapshot_roundtrip():
     bus = _save_bus(SRAM_ID)
     bus.write_u8(0x0E000010, 0xAB)

@@ -18,6 +18,8 @@ pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const FRAME_CYCLES: u64 = 280_896; // 228 scanlines * 1232
 pub const SCANLINE_CYCLES: u64 = 1_232;
 pub const SCANLINES: u16 = 228;
+
+
 pub const SNAPSHOT_HEADER_SIZE: usize = 90;
 
 pub(crate) fn put_u16(out: &mut Vec<u8>, value: u16) {
@@ -1258,6 +1260,39 @@ mod tests {
         let frame = core.run_frame().unwrap();
         assert_eq!(frame.cycles, FRAME_CYCLES);
         assert!(core.cpu.halted);
+    }
+
+    fn read_io16(core: &Core, offset: usize) -> u16 {
+        u16::from_le_bytes([core.bus.io[offset], core.bus.io[offset + 1]])
+    }
+
+    #[test]
+    fn post_boot_sets_affine_identity() {
+        // BIOS 開機 default：BG2/BG3 affine matrix = identity（PA=PD=0x0100）。
+        let core = Core::new(minimal_rom(), CoreConfig::default()).unwrap();
+        for offset in [0x20usize, 0x26, 0x30, 0x36] {
+            assert_eq!(read_io16(&core, offset), 0x0100, "offset {offset:#x}");
+        }
+    }
+
+    #[test]
+    fn register_ram_reset_sets_affine_identity() {
+        // LeafGreen 開機用 SWI 0x01（flags 0x80）重設 IO，之後靠 BIOS 的
+        // identity default 用 BG2 畫 Professor Oak。
+        let mut rom = vec![0u8; 0x200];
+        rom[0xB2] = 0x96;
+        rom[0..4].copy_from_slice(&0xE3A0_0080u32.to_le_bytes()); // mov r0, #0x80
+        rom[4..8].copy_from_slice(&0xEF01_0000u32.to_le_bytes()); // swi 0x01（comment 在 bit16-23）
+        rom[8..12].copy_from_slice(&0xEAFF_FFFEu32.to_le_bytes()); // b .
+        let mut core = Core::new(rom, functional_config()).unwrap();
+        for offset in [0x20usize, 0x26, 0x30, 0x36] {
+            core.bus.write16(0x0400_0000 + offset as u32, 0);
+        }
+        core.step().unwrap(); // mov r0, #0x80
+        core.step().unwrap(); // swi 0x01
+        for offset in [0x20usize, 0x26, 0x30, 0x36] {
+            assert_eq!(read_io16(&core, offset), 0x0100, "offset {offset:#x}");
+        }
     }
 
     #[test]

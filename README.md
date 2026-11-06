@@ -19,7 +19,8 @@ PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gba
 | Rust core | `crates/gbaemu-core`（CPU／bus／PPU／DMA／timer／IRQ／audio／save media）＋PyO3 `gbaemu._native`；GUI 預設後端 | ✅ |
 | GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav` 自動載入／原子寫回 | ✅ |
 
-已驗證：`pytest tests -q` → **302 passed, 1 skipped**；
+已驗證：`pytest tests -q` → **302 passed, 1 skipped**（已 build Rust core；
+未 build 的 fresh clone 為 281 passed, 3 skipped，native 測試自動 skip）；
 `cargo test` → **104 passed**；硬體測試 ROM（外部 `test-rom/`）Memory 1552/1552、
 DMA 1256/1256、BIOS math 615/615 等（見 [`docs/architecture/MIGRATION.md`](docs/architecture/MIGRATION.md)）。
 

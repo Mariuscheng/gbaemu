@@ -967,3 +967,20 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
   `57FA8240...520756`）。
 - **待補**：LeafGreen 由 title 玩到 save menu 的全自動流程測試（要大量輸入
   腳本）；現階段硬件協定同持久化已對齊 Python reference。
+
+## 公開 GitHub repo 清理（2026-11-06）
+
+- 移出 repo（保留在 `D:\python\gbaemu-lab\`，唔入版控）：
+  `rom/`（54 MB ROM／BIOS／.sav）、`test-rom/`（jsmolka 硬體測試 ROM）、
+  `debug/` 證據（mGBA C 源碼、timing log、測試截圖）、`ref_*.bmp`、
+  legacy Cython `pygba/`、`tools/setup_legacy.py`、`tests/test_*.py`
+  （185 個 legacy 測試）、`.vscode`。
+- `gbaemu/debug/` 只保留 `breakpoints.py`（生產用）。
+- `tests/reference/gba_cpu/` 改為自帶 `bios_ref.py`，唔再依賴 `pygba`。
+- 新增 `rom/README.md`、重寫 `.gitignore`、`.gitattributes`（LF）；
+  `main.py` 支援 `python main.py <rom>` 同友善缺 ROM 訊息；Ctrl+C 都會 flush `.sav`。
+- `.git` 舊歷史（42.7 MB）備份到 lab；public repo 用新的單一 commit：
+  175 files / 2.56 MB（fresh clone 實測 281 passed, 3 skipped）。
+- 現行測試：`tests/gbaemu`（303 collected）＋`tests/reference`；
+  legacy 測試／`pygba` 已喺 lab。
+- 發佈前仍要：補 `LICENSE`、設定 GitHub remote（`git remote add origin ...`）。

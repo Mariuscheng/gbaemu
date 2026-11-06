@@ -14,20 +14,20 @@ PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gba
 |---|---|---|
 | Phase 0–2 | 套件骨架、ROM header、HLE boot、ARM7TDMI ARM/THUMB、bus／例外、PPU、Mode 3/4/5、frame boundary | ✅ |
 | Phase 3 | DMA（含 DMA Sound FIFO）、timers、IRQ／Halt／IntrWait、SWI、save media、snapshot | ✅ |
-| Phase 4 | 音訊 PSG 4 聲道＋DMA Sound、Mode 0/1/2＋sprites／window／mosaic／blending、video contention | ✅ |
+| Phase 4 | 音訊 PSG 4 聲道＋DMA Sound（FIFO repeat 語意）、Mode 0/1/2＋sprites／WIN0／WIN1／OBJ window／mosaic／blending、video contention | ✅ |
 | Phase 5 | `GBAEnv`、`GbaApp` facade、frame skip、snapshot branching、Gymnasium `check_env` | ✅ |
 | Rust core | `crates/gbaemu-core`（CPU／bus／PPU／DMA／timer／IRQ／audio／save media）＋PyO3 `gbaemu._native`；GUI 預設後端 | ✅ |
 | GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav` 自動載入／原子寫回 | ✅ |
 
-已驗證：`pytest tests -q` → **302 passed, 1 skipped**（已 build Rust core；
+已驗證：`pytest tests -q` → **309 passed, 1 skipped**（已 build Rust core；
 未 build 的 fresh clone 為 281 passed, 3 skipped，native 測試自動 skip）；
-`cargo test` → **104 passed**；硬體測試 ROM（外部 `test-rom/`）Memory 1552/1552、
+`cargo test` → **109 passed**；硬體測試 ROM（外部 `test-rom/`）Memory 1552/1552、
 DMA 1256/1256、BIOS math 615/615 等（見 [`docs/architecture/MIGRATION.md`](docs/architecture/MIGRATION.md)）。
 
 已知缺口（詳見 [`TODO.md`](TODO.md)）：
 
-- SOUNDBIAS／PWM（9-bit）輸出未模擬；DMA Sound 的 count／repeat 語意未完整
-- OBJ window 未實作；wave RAM bank 時序、部分 timer count-up／IRQ 邊界
+- SOUNDBIAS／PWM（9-bit）輸出未模擬（DMA Sound repeat／count 語意 2026-11-07 已補）
+- wave RAM bank 時序未模擬；timer count-up 已實作，剩部分 IRQ 邊界
 - Timing 測試 1852/2020（mGBA accounting）；BIOS 精確度與 SIO 部分行為
 - RL process pool／trace replay 未實作
 

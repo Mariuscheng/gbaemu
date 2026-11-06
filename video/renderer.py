@@ -116,6 +116,7 @@ class _Sprite:
         "hflip",
         "vflip",
         "mosaic",
+        "window",
     )
 
 
@@ -128,6 +129,7 @@ class _RenderState:
         "text_layers",
         "affine_layers",
         "sprites",
+        "window_sprites",
         "alpha_enabled",
         "fade_enabled",
         "eva",
@@ -216,6 +218,7 @@ def _build_state(ppu, vram, palette, oam) -> _RenderState:
             state.affine_layers.append(layer)
 
     state.sprites = []
+    state.window_sprites = []
     state.obj_1d = bool(dispcnt & 0x0040)
     if (dispcnt & 0x1000) and oam is not None:
         oam_data = state.oam
@@ -239,6 +242,7 @@ def _build_state(ppu, vram, palette, oam) -> _RenderState:
             if sprite.y >= 160:
                 sprite.y -= 256
             sprite.affine = bool(attr0 & 0x0100)
+            sprite.window = (attr0 >> 10) & 0x3 == 2
             double_size = bool(attr0 & 0x0200)
             if double_size:
                 width *= 2
@@ -267,7 +271,10 @@ def _build_state(ppu, vram, palette, oam) -> _RenderState:
                 sprite.pb = _s16(oam_data[param + 8] | (oam_data[param + 9] << 8))
                 sprite.pc = _s16(oam_data[param + 16] | (oam_data[param + 17] << 8))
                 sprite.pd = _s16(oam_data[param + 24] | (oam_data[param + 25] << 8))
-            state.sprites.append(sprite)
+            if sprite.window:
+                state.window_sprites.append(sprite)
+            else:
+                state.sprites.append(sprite)
 
     control = regs(0x050)
     alpha = regs(0x052)
@@ -563,6 +570,15 @@ def _window_inside(h: int, v: int, x: int, y: int) -> bool:
     return x1 <= x < x2 and y1 <= y < y2
 
 
+def _obj_window_inside(state: _RenderState, x: int, y: int) -> bool:
+    """(x, y) 是否在 OBJ window sprite 的不透明 pixel 內。"""
+
+    for sprite in state.window_sprites:
+        if _sprite_pixel(state, sprite, x, y) is not None:
+            return True
+    return False
+
+
 def _window_mask(state: _RenderState, x: int, y: int) -> int:
     if not state.windows_enabled:
         return 0x3F
@@ -573,6 +589,8 @@ def _window_mask(state: _RenderState, x: int, y: int) -> int:
         return state.winin & 0x3F
     if state.win1_on and _window_inside(state.win1h, state.win1v, x, y):
         return (state.winin >> 8) & 0x3F
+    if state.windows_enabled & 0x8000 and _obj_window_inside(state, x, y):
+        return (state.winout >> 8) & 0x3F
     return state.winout & 0x3F
 
 

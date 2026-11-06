@@ -983,6 +983,7 @@ impl Bus {
 
     fn run_fifo_dma(&mut self, index: usize) -> u32 {
         let dest = self.dma_dad[index];
+        let control = self.dma_cnt_h[index];
         self.fifo_refilling = true;
         for _ in 0..4 {
             let source = self.dma_source[index];
@@ -991,7 +992,22 @@ impl Bus {
             self.dma_source[index] = source.wrapping_add(4);
         }
         self.fifo_refilling = false;
-        self.check_fifo_dma();
+        // GBATEK Sound FIFO DMA：每次 refill 固定 4 words（16 bytes），mGBA
+        // `GBAAudioSampleFIFO` 亦係 `nextCount = 4`。真正決定「FIFO 見底時
+        // 會唔會再 refill」嘅係 DMA 嘅 repeat bit（bit9）：clear 就喺呢次
+        // transfer 之後清 enable，FIFO 播完 16 bytes 就自然停（one-shot SFX）；
+        // set 就保持 enable，等下一個 FIFO request。
+        if control & 0x0200 == 0 {
+            self.dma_count[index] = 0;
+            self.dma_active[index] = false;
+            self.dma_cnt_h[index] = control & !0x8000;
+            if control & 0x4000 != 0 {
+                self.if_ |= 1 << (8 + index);
+                self.irq_seen |= 1 << (8 + index);
+            }
+        } else {
+            self.check_fifo_dma();
+        }
         10
     }
 
@@ -2442,6 +2458,46 @@ mod tests {
         bus.keyinput = 0x03FC; // A+B
         bus.poll_keypad();
         assert_eq!(bus.if_ & 0x1000, 0x1000);
+    }
+
+    #[test]
+    fn fifo_dma_without_repeat_disables_channel() {
+        let mut bus = bus();
+        bus.write32(0x0200_0000, 0x1122_3344);
+        // DMA1：EWRAM → FIFO A、32-bit、Special timing、enable（無 repeat bit）。
+        bus.write32(0x0400_00BC, 0x0200_0000);
+        bus.write32(0x0400_00C0, 0x0400_00A0);
+        bus.write16(0x0400_00C4, 4);
+        bus.write16(0x0400_00C6, 0x8000 | (1 << 10) | (3 << 12));
+        bus.write16(0x0400_0082, (1 << 2) | (1 << 11)); // SOUNDCNT_H：FIFO A 開
+        bus.write32(0x0400_00A0, 0); // FIFO 見底 → 排 DMA1
+        assert!(bus.dma_pending.contains(&1));
+
+        assert!(bus.run_dma(1) > 0);
+        assert_eq!(bus.sound_fifo_a.len(), 20);
+        // repeat bit clear：呢次 16-byte refill 之後要清 enable，唔會再 refill。
+        assert!(!bus.dma_active[1]);
+        assert_eq!(bus.dma_cnt_h[1] & 0x8000, 0);
+        bus.dma_pending.clear();
+        bus.check_fifo_dma();
+        assert!(!bus.dma_pending.contains(&1));
+    }
+
+    #[test]
+    fn fifo_dma_repeat_keeps_channel_enabled() {
+        let mut bus = bus();
+        bus.write32(0x0200_0000, 0x1122_3344);
+        bus.write32(0x0400_00BC, 0x0200_0000);
+        bus.write32(0x0400_00C0, 0x0400_00A0);
+        bus.write16(0x0400_00C4, 4);
+        bus.write16(0x0400_00C6, 0x8000 | (1 << 10) | (1 << 9) | (3 << 12));
+        bus.write16(0x0400_0082, (1 << 2) | (1 << 11));
+        bus.write32(0x0400_00A0, 0);
+        assert!(bus.run_dma(1) > 0);
+        assert_eq!(bus.dma_source[1], 0x0200_0010);
+        // repeat bit set：channel 保持 enable，等下一個 FIFO request。
+        assert!(bus.dma_active[1]);
+        assert_ne!(bus.dma_cnt_h[1] & 0x8000, 0);
     }
 
     #[test]

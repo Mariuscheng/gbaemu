@@ -328,6 +328,23 @@ def main() -> int:
             ],
             pixels=[(0, 0), (7, 7), (8, 8), (239, 159)],
         ),
+        FrameCase(
+            "mode0_obj_window_sprite",
+            writes=[
+                (16, 0x0400_0000, 0x9100),  # OBJ + OBJ window + BG0
+                (16, 0x0400_0008, 0x0004),  # BG0 char base 0x4000
+                (16, 0x0400_004A, 0x0100),  # WINOUT: OBJ window 內 = BG0
+                (16, 0x0500_0000, 0x03E0),  # backdrop 綠
+                (16, 0x0500_0002, 0x001F),  # BG palette 1 紅
+                (16, 0x0600_0000, 0x0000),  # BG0 map tile 0
+                (16, 0x0700_0000, 0x0800),  # attr0: OBJ window mode、y=0
+                (16, 0x0700_0002, 0x0000),  # attr1: x=0、8x8
+                (16, 0x0700_0004, 0x0000),  # attr2: tile 0、4bpp
+                *[(16, 0x0600_4000 + index * 2, 0x1111) for index in range(16)],
+                *[(16, 0x0601_0000 + index * 2, 0x1111) for index in range(16)],
+            ],
+            pixels=[(0, 0), (7, 7), (8, 8), (239, 159)],
+        ),
     ]
 
     probe = Probe()

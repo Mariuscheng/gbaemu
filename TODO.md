@@ -1023,3 +1023,49 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
 - **測試**：`test_gbaapp_stop_skips_sav_when_game_did_not_save`、
   `test_battery_dirty_tracks_save_writes`（native）、
   `test_python_battery_dirty_tracks_save_writes`（Python）。
+
+## README「已知缺口」核對：OBJ window、DMA Sound repeat、SOUNDBIAS、wave RAM bank（2026-11-07）
+
+- **背景**：用戶問 README 4 項係咪真未實作；逐項核對 code 之後，今輪補咗
+  OBJ window 同 DMA Sound repeat 兩項。
+- **核對結果**：
+  1. **OBJ window — 之前真係冇，今輪補齊**。`window_mask()`／`_window_mask()`
+     只檢查 WIN0（DISPCNT bit13）／WIN1（bit14），完全冇用 bit15 同 WINOUT
+     bit8-13；Rust `collect_line_sprites()` 直接 `continue` 跳過 attr0 mode 2
+     sprite，Python `_build_state()` 當普通 sprite 畫。
+     修正：mode 2 sprite 收集成 window sprite（唔畫），逐 pixel 用同一 tile
+     解碼；Rust `sprite_color_at()`／`obj_window_inside()`、Python
+     `_obj_window_inside()`；優先次序 WIN0 > WIN1 > OBJ window > 窗外。只計
+     非透明 pixel（mGBA `SPRITE_DRAW_PIXEL_*_OBJWIN` 的 `if (tileData)` 語意）。
+     測試：`obj_window_uses_winout_layers`（cargo）、`test_obj_window_masks_layers`
+     （pytest）、`rust_frame_diff` 新增 `mode0_obj_window_sprite`（17/17）。
+  2. **DMA Sound count／repeat — 部分未實作，今輪補 repeat**。`run_fifo_dma()`／
+     `_run_fifo()` 每次固定搬 16 bytes 之後無條件繼續 refill，ignore DMAxCNT_H
+     bit9；結果 repeat bit clear 的 one-shot SFX 會無限重播。現在 refill 後：
+     repeat clear → 清 enable＋DMA IRQ、channel inactive；repeat set → 保持
+     enable。count 本身 hardware／mGBA 都係固定 4 words
+     （`GBAAudioSampleFIFO` `nextCount = 4`），已對齊。
+     測試：Rust `fifo_dma_without_repeat_disables_channel`／
+     `fifo_dma_repeat_keeps_channel_enabled`；Python
+     `test_fifo_dma_without_repeat_disables_channel`／
+     `test_fifo_dma_repeat_keeps_channel_enabled`。
+  3. **SOUNDBIAS／PWM — 真未實作**。`sound.rs`／`audio/sound.py` 冇讀
+     `0x04000088`（SOUNDBIAS）；輸出固定 32768 Hz、sample 直接 clamp 成 s16，
+     冇 9-bit PWM 載波、冇 bias（0x200）加減。影響：resolution 1/2
+     （65536／131072 Hz）同 PWM 高頻細節唔跟實機；大部分遊戲用預設值，聽感
+     差異細。
+  4. **wave RAM bank 時序 — 真未實作**。wave RAM 有兩個 16-byte bank，我們只有
+     `io[0x90..0xA0]` 一個；SOUND3CNT_L bit6 bank select、播放中 CPU 存取另一個
+     bank、audio off 時的 bank 行為（mGBA `GBAAudioRead/WriteWaveRAM`）都冇。
+     影響：會 bank 切換的 wave channel 音樂（少數遊戲）取樣錯誤。
+  5. **timer count-up — 其實已實作**（Rust `timer_cascade`、Python
+     `Timers.cascade`，有 `timer_prescaler_overflow_and_cascade` 測試）。
+     README 原文「部分 timer count-up／IRQ 邊界」應理解為 count-up 已做、
+     剩部分 IRQ edge。
+  6. **Timing 1852/2020、BIOS/SIO 部分行為、RL process pool／trace replay —
+     真未完成**，屬 accuracy／feature 範圍。
+- **驗證**：`pytest tests -q` 309 passed / 1 skipped、`cargo test` 109 passed、
+  `rust_frame_diff` 17/17、Dr. Mario 120 frames native vs Python hash 相同
+  （`03ec38bb3bb491c5`，139.3 fps vs 6.7 fps，20.8×）、rates.gba 180 frames 有
+  非靜音 PCM（max 10240）。
+- **產物**：`_native.pyd`、`dist/gbaemu-0.1.0-...whl` 重 build。

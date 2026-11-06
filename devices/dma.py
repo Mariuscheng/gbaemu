@@ -325,7 +325,12 @@ class DmaController:
         return cycles
 
     def _run_fifo(self, index: int) -> int:
-        """Sound FIFO：固定搬 4 words（16 bytes）到 0x040000A0/A4，dest 不遞增。"""
+        """Sound FIFO：固定搬 4 words（16 bytes）到 0x040000A0/A4，dest 不遞增。
+
+        GBATEK：每次 refill 固定 4 words；DMA repeat bit（bit9）clear 時，
+        呢次 transfer 之後要清 enable，FIFO 播完 16 bytes 就停（one-shot
+        SFX）；set 時保持 enable，等下一個 FIFO request 再 refill。
+        """
 
         channel = self.channels[index]
         dest = self._latched[index][1] & 0xFFFFFFFF
@@ -343,6 +348,12 @@ class DmaController:
         if sound is not None:
             sound.end_refill()
         channel.source = source
+        if not (channel.control & REPEAT_BIT):
+            channel.active = False
+            channel.word_count = 0
+            self._latched[index][3] = channel.control & ~ENABLE_BIT
+            if channel.irq_enable and self._irq is not None:
+                self._irq(IRQ_DMA0 << index)
         cost = 4 * self._cost(source, 4, False) + 4 * self._cost(dest, 4, False)
         return cost + 2
 

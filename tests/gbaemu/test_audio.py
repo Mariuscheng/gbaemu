@@ -83,6 +83,48 @@ def test_fifo_dma_special_timing(tmp_path):
     assert bytes(bus.sound.fifo_a[4:8]) == (0x11110000).to_bytes(4, "little")
 
 
+def test_fifo_dma_without_repeat_disables_channel(tmp_path):
+    """GBATEK：repeat bit clear → 16 bytes refill 之後清 enable（one-shot SFX）。"""
+
+    emu = _emu(tmp_path)
+    bus = emu._bus
+    bus.write_u32(0x02000000, 0x11223344)
+    bus.write_u32(0x040000BC, 0x02000000)  # DMA1 SAD
+    bus.write_u32(0x040000C0, FIFO_A)  # DMA1 DAD
+    bus.write_u16(0x040000C4, 4)
+    bus.write_u16(0x040000C6, 0x8000 | (1 << 10) | (3 << 12))  # 無 repeat
+    bus.write_u16(SOUNDCNT_H, (1 << 2) | (1 << 11))
+    bus.write_u32(FIFO_A, 0)  # FIFO 見底 → 排 DMA1
+
+    assert bus.dma.pending == [1]
+    bus.dma.service()
+    assert len(bus.sound.fifo_a) == 20  # 4 + 16
+    channel = bus.dma.channels[1]
+    assert not channel.active
+    assert channel.word_count == 0
+    assert not (bus.dma._latched[1][3] & (1 << 15))
+    bus.dma.pending.clear()
+    bus.dma.request_fifo(1)  # enable 已清：唔會再排隊
+    assert bus.dma.pending == []
+
+
+def test_fifo_dma_repeat_keeps_channel_enabled(tmp_path):
+    emu = _emu(tmp_path)
+    bus = emu._bus
+    bus.write_u32(0x02000000, 0x11223344)
+    bus.write_u32(0x040000BC, 0x02000000)
+    bus.write_u32(0x040000C0, FIFO_A)
+    bus.write_u16(0x040000C4, 4)
+    bus.write_u16(0x040000C6, 0x8000 | (1 << 10) | (1 << 9) | (3 << 12))
+    bus.write_u16(SOUNDCNT_H, (1 << 2) | (1 << 11))
+    bus.write_u32(FIFO_A, 0)
+    bus.dma.service()
+    channel = bus.dma.channels[1]
+    assert channel.active  # repeat：channel 保持 enable
+    assert bus.dma._latched[1][3] & (1 << 15)
+    assert channel.source == 0x02000010
+
+
 def test_emulator_services_fifo_dma(tmp_path):
     emu = _emu(tmp_path)
     bus = emu._bus

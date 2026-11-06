@@ -157,6 +157,28 @@ def test_sprite_hflip(tmp_path):
     assert _pixel(frame, 7, 0) == (255, 0, 0)
 
 
+def test_obj_window_masks_layers(tmp_path):
+    """DISPCNT bit15 + attr0 mode 2 sprite：window 內用 WINOUT bit8-13 的 layer。"""
+
+    emu = _emu(tmp_path)
+    emu.memory.write_u16(DISPCTRL, 0x9100)  # OBJ + OBJ window + BG0
+    emu.memory.write_u16(BG0CNT, 0x0004)
+    _fill(emu, VRAM + 0x4000, 0x11, 32)  # BG0 tile 0 = color 1
+    emu.memory.write_u16(VRAM, 0)  # map[0] = tile 0
+    emu.memory.write_u16(PALETTE + 2, 0x001F)  # BG red
+    emu.memory.write_u16(PALETTE, 0x03E0)  # green backdrop
+    emu.memory.write_u16(0x0400004A, 0x0100)  # WINOUT: OBJ window 內 = BG0
+    emu.memory.write_u16(OAM_BASE + 0, 0x0800)  # y=0、OBJ window mode、8x8
+    emu.memory.write_u16(OAM_BASE + 2, 0)  # x=0
+    emu.memory.write_u16(OAM_BASE + 4, 0)  # tile 0
+    _fill(emu, VRAM + 0x10000, 0x11, 32)  # OBJ window sprite 的 tile 全不透明
+
+    frame = _render(emu)
+    assert _pixel(frame, 0, 0) == (255, 0, 0)  # OBJ window 內 → BG0
+    assert _pixel(frame, 7, 7) == (255, 0, 0)
+    assert _pixel(frame, 8, 0) == (0, 255, 0)  # window 外 → backdrop
+
+
 def test_alpha_blend_bg_over_backdrop(tmp_path):
     emu = _emu(tmp_path)
     emu.memory.write_u16(DISPCTRL, 0x0100 | 0x0040)  # Mode 0 + BG0 + alpha? bit6 is OBJ 1D

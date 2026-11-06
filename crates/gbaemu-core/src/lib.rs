@@ -169,6 +169,8 @@ struct LineSprite {
     index: u16,
     palette_bank: usize,
     mosaic: u32,
+    /// OBJ window（attr0 mode 2）：只參與 window mask，不當普通 sprite 畫。
+    window: bool,
 }
 
 const SPRITE_SIZES: [[(u32, u32); 4]; 3] = [
@@ -199,10 +201,8 @@ fn collect_line_sprites(bus: &Bus, y: u32, dispcnt: u16) -> Vec<LineSprite> {
         if shape == 3 {
             continue;
         }
-        // OBJ window（mode 2）唔當普通 sprite 畫。
-        if (attr0 >> 10) & 3 == 2 {
-            continue;
-        }
+        // OBJ window（mode 2）照樣收集，之後由 `window_mask` 當 window 用。
+        let window = (attr0 >> 10) & 3 == 2;
         let attr1 = u16::from_le_bytes([bus.oam[o + 2], bus.oam[o + 3]]);
         let attr2 = u16::from_le_bytes([bus.oam[o + 4], bus.oam[o + 5]]);
         let size = ((attr1 >> 14) & 0x3) as usize;
@@ -262,6 +262,7 @@ fn collect_line_sprites(bus: &Bus, y: u32, dispcnt: u16) -> Vec<LineSprite> {
             index: index as u16,
             palette_bank: ((attr2 >> 12) & 0xF) as usize,
             mosaic,
+            window,
         });
     }
     let _ = obj_1d;
@@ -271,6 +272,79 @@ fn collect_line_sprites(bus: &Bus, y: u32, dispcnt: u16) -> Vec<LineSprite> {
 fn sprite_pixel(bus: &Bus, x: u32, y: u32, dispcnt: u16) -> Option<(u16, u16)> {
     let sprites = collect_line_sprites(bus, y, dispcnt);
     sprite_pixel_in(bus, x, y, dispcnt, &sprites)
+}
+
+/// 單一 OBJ 在 (x,y) 的顏色；透明 pixel 回 `None`。
+///
+/// OBJ window sprite 同普通 sprite 用同一個 pixel 解碼，只係前者唔計
+/// priority、只當「呢個 pixel 有冇著色」用（mGBA `SPRITE_DRAW_PIXEL_*_OBJWIN`
+/// 只在 `tileData != 0` 時設 FLAG_OBJWIN）。
+fn sprite_color_at(bus: &Bus, sprite: &LineSprite, obj_1d: bool, x: u32, y: u32) -> Option<u16> {
+    let w = sprite.w;
+    let h = sprite.h;
+    let mosaic = sprite.mosaic;
+    let mx = x - x % mosaic;
+    let my = y - y % mosaic;
+    let (px, py);
+    if sprite.affine {
+        let disp_w = if sprite.double_size { w * 2 } else { w };
+        let disp_h = if sprite.double_size { h * 2 } else { h };
+        let sx0 = if sprite.double_size { sprite.x - (w as i32) / 2 } else { sprite.x };
+        let sy0 = if sprite.double_size { sprite.y - (h as i32) / 2 } else { sprite.y };
+        let cx = sx0 + disp_w as i32 / 2;
+        let cy = sy0 + disp_h as i32 / 2;
+        let dx = mx as i32 - cx;
+        let dy = my as i32 - cy;
+        let tex_x = ((sprite.pa * dx + sprite.pb * dy) >> 8) + (w as i32) / 2;
+        let tex_y = ((sprite.pc * dx + sprite.pd * dy) >> 8) + (h as i32) / 2;
+        if tex_x < 0 || tex_y < 0 || tex_x as u32 >= w || tex_y as u32 >= h {
+            return None;
+        }
+        px = tex_x as u32;
+        py = tex_y as u32;
+    } else {
+        let dx = mx as i32 - sprite.x;
+        let dy = my as i32 - sprite.y;
+        if dx < 0 || dy < 0 || dx as u32 >= w || dy as u32 >= h {
+            return None;
+        }
+        let mut fx = dx as u32;
+        let mut fy = dy as u32;
+        if sprite.hflip {
+            fx = w - 1 - fx;
+        }
+        if sprite.vflip {
+            fy = h - 1 - fy;
+        }
+        px = fx;
+        py = fy;
+    }
+    let step = if sprite.bpp8 { 2u32 } else { 1u32 };
+    let tile_index = if obj_1d {
+        sprite.tile + (py / 8) * (w / 8) * step + (px / 8) * step
+    } else {
+        sprite.tile + (py / 8) * 32 + (px / 8) * step
+    };
+    let color_index = if sprite.bpp8 {
+        let address = 0x10000 + (tile_index & 0x3FE) * 32 + (py % 8) * 8 + (px % 8);
+        bus.vram[address as usize]
+    } else {
+        let address = 0x10000 + (tile_index & 0x3FF) * 32 + (py % 8) * 4 + (px % 8) / 2;
+        let byte = bus.vram[address as usize];
+        ((byte >> (((px % 8) & 1) * 4)) & 0x0F) as u8
+    };
+    if color_index == 0 {
+        return None;
+    }
+    let palette_index = if sprite.bpp8 {
+        0x100 + color_index as usize
+    } else {
+        0x100 + sprite.palette_bank * 16 + color_index as usize
+    };
+    Some(u16::from_le_bytes([
+        bus.palette[palette_index * 2],
+        bus.palette[palette_index * 2 + 1],
+    ]))
 }
 
 fn sprite_pixel_in(
@@ -285,74 +359,15 @@ fn sprite_pixel_in(
     let mut best_index = 256u16;
     let mut best_color = 0u16;
     for sprite in sprites {
-        let w = sprite.w;
-        let h = sprite.h;
-        let mosaic = sprite.mosaic;
-        let mx = x - x % mosaic;
-        let my = y - y % mosaic;
-        let (px, py);
-        if sprite.affine {
-            let disp_w = if sprite.double_size { w * 2 } else { w };
-            let disp_h = if sprite.double_size { h * 2 } else { h };
-            let sx0 = if sprite.double_size { sprite.x - (w as i32) / 2 } else { sprite.x };
-            let sy0 = if sprite.double_size { sprite.y - (h as i32) / 2 } else { sprite.y };
-            let cx = sx0 + disp_w as i32 / 2;
-            let cy = sy0 + disp_h as i32 / 2;
-            let dx = mx as i32 - cx;
-            let dy = my as i32 - cy;
-            let tex_x = ((sprite.pa * dx + sprite.pb * dy) >> 8) + (w as i32) / 2;
-            let tex_y = ((sprite.pc * dx + sprite.pd * dy) >> 8) + (h as i32) / 2;
-            if tex_x < 0 || tex_y < 0 || tex_x as u32 >= w || tex_y as u32 >= h {
-                continue;
-            }
-            px = tex_x as u32;
-            py = tex_y as u32;
-        } else {
-            let dx = mx as i32 - sprite.x;
-            let dy = my as i32 - sprite.y;
-            if dx < 0 || dy < 0 || dx as u32 >= w || dy as u32 >= h {
-                continue;
-            }
-            let mut fx = dx as u32;
-            let mut fy = dy as u32;
-            if sprite.hflip {
-                fx = w - 1 - fx;
-            }
-            if sprite.vflip {
-                fy = h - 1 - fy;
-            }
-            px = fx;
-            py = fy;
-        }
-        let step = if sprite.bpp8 { 2u32 } else { 1u32 };
-        let tile_index = if obj_1d {
-            sprite.tile + (py / 8) * (w / 8) * step + (px / 8) * step
-        } else {
-            sprite.tile + (py / 8) * 32 + (px / 8) * step
-        };
-        let color_index = if sprite.bpp8 {
-            let address = 0x10000 + (tile_index & 0x3FE) * 32 + (py % 8) * 8 + (px % 8);
-            bus.vram[address as usize]
-        } else {
-            let address = 0x10000 + (tile_index & 0x3FF) * 32 + (py % 8) * 4 + (px % 8) / 2;
-            let byte = bus.vram[address as usize];
-            ((byte >> (((px % 8) & 1) * 4)) & 0x0F) as u8
-        };
-        if color_index == 0 {
+        if sprite.window {
             continue;
         }
-        let palette_index = if sprite.bpp8 {
-            0x100 + color_index as usize
-        } else {
-            0x100 + sprite.palette_bank * 16 + color_index as usize
-        };
-        if (sprite.priority, sprite.index) < (best_priority, best_index) {
-            best_priority = sprite.priority;
-            best_index = sprite.index;
-            best_color = u16::from_le_bytes([
-                bus.palette[palette_index * 2],
-                bus.palette[palette_index * 2 + 1],
-            ]);
+        if let Some(color) = sprite_color_at(bus, sprite, obj_1d, x, y) {
+            if (sprite.priority, sprite.index) < (best_priority, best_index) {
+                best_priority = sprite.priority;
+                best_index = sprite.index;
+                best_color = color;
+            }
         }
     }
     if best_index == 256 {
@@ -360,6 +375,17 @@ fn sprite_pixel_in(
     } else {
         Some((best_priority, best_color))
     }
+}
+
+/// (x, y) 是否在任何 OBJ window sprite 的不透明 pixel 內。
+fn obj_window_inside(bus: &Bus, x: u32, y: u32, dispcnt: u16, sprites: &[LineSprite]) -> bool {
+    if sprites.is_empty() {
+        return false;
+    }
+    let obj_1d = dispcnt & 0x0040 != 0;
+    sprites
+        .iter()
+        .any(|sprite| sprite_color_at(bus, sprite, obj_1d, x, y).is_some())
 }
 
 
@@ -391,7 +417,7 @@ fn window_inside(h: u16, v: u16, x: u32, y: u32) -> bool {
     x1 <= x && x < x2 && y1 <= y && y < y2
 }
 
-fn window_mask(bus: &Bus, x: u32, y: u32, dispcnt: u16) -> u16 {
+fn window_mask(bus: &Bus, x: u32, y: u32, dispcnt: u16, window_sprites: &[LineSprite]) -> u16 {
     if dispcnt & 0xE000 == 0 {
         return 0x3F;
     }
@@ -400,11 +426,16 @@ fn window_mask(bus: &Bus, x: u32, y: u32, dispcnt: u16) -> u16 {
     // 暫存器順序：0x040 WIN0H、0x042 WIN1H、0x044 WIN0V、0x046 WIN1V。
     // WININ 低 6 bit = WIN0 內可見 layers、bit8-13 = WIN1 內；
     // WINOUT 低 6 bit = 兩個 window 外、bit8-13 = OBJ window 內。
+    // 優先順序固定 WIN0 > WIN1 > OBJ window > 窗外（GBATEK Video/Windows；
+    // mGBA 以 window priority 0/1/2/3 實作）。
     if dispcnt & 0x2000 != 0 && window_inside(io_u16(bus, 0x40), io_u16(bus, 0x44), x, y) {
         return winin & 0x3F;
     }
     if dispcnt & 0x4000 != 0 && window_inside(io_u16(bus, 0x42), io_u16(bus, 0x46), x, y) {
         return (winin >> 8) & 0x3F;
+    }
+    if dispcnt & 0x8000 != 0 && obj_window_inside(bus, x, y, dispcnt, window_sprites) {
+        return (winout >> 8) & 0x3F;
     }
     winout & 0x3F
 }
@@ -451,9 +482,11 @@ fn render_mode0(bus: &Bus, framebuffer: &mut [u8], y0: u32, y1: u32) {
     let fade_amount = io_u16(bus, 0x54) & 0x1F;
     let windows_enabled = dispcnt & 0xE000 != 0;
     for y in y0..y1 {
-        let line_sprites = collect_line_sprites(bus, y, dispcnt);
+        let mut line_sprites = collect_line_sprites(bus, y, dispcnt);
+        let window_sprites: Vec<LineSprite> = line_sprites.iter().copied().filter(|s| s.window).collect();
+        line_sprites.retain(|s| !s.window);
         for x in 0..240u32 {
-            let mask = if windows_enabled { window_mask(bus, x, y, dispcnt) } else { 0x3F };
+            let mask = if windows_enabled { window_mask(bus, x, y, dispcnt, &window_sprites) } else { 0x3F };
             let mut best_priority = 5u16;
             let mut best_order = 4u16;
             let mut best_color = backdrop;
@@ -827,14 +860,16 @@ impl Core {
         let bg_target = 1u16 << 2;
         let obj_target = 0x10u16;
         for y in y0..y1 {
-            let line_sprites = if obj_on {
+            let mut line_sprites = if obj_on {
                 collect_line_sprites(&self.bus, y, dispcnt)
             } else {
                 Vec::new()
             };
+            let window_sprites: Vec<LineSprite> = line_sprites.iter().copied().filter(|s| s.window).collect();
+            line_sprites.retain(|s| !s.window);
             for x in 0..240u32 {
                 let mask = if windows_enabled {
-                    window_mask(&self.bus, x, y, dispcnt)
+                    window_mask(&self.bus, x, y, dispcnt, &window_sprites)
                 } else {
                     0x3F
                 };
@@ -1413,6 +1448,34 @@ mod tests {
         assert_eq!(&core.framebuffer()[0..3], &[0xFF, 0x00, 0x00]);
     }
 
+
+    #[test]
+    fn obj_window_uses_winout_layers() {
+        let mut rom = vec![0u8; 0x100];
+        rom[0xB2] = 0x96;
+        rom[0..4].copy_from_slice(&0xEAFF_FFFEu32.to_le_bytes());
+        let mut core = Core::new(rom, CoreConfig::default()).unwrap();
+        // Mode 0：BG0 全畫面紅；窗外 hide BG0，OBJ window 內 show BG0。
+        core.bus.write16(0x0400_0000, 0x9100); // OBJ + OBJ window + BG0
+        core.bus.write16(0x0400_0008, 0x0004); // BG0 char base 0x4000
+        core.bus.write16(0x0400_004A, 0x0100); // WINOUT: OBJ window 內 = BG0
+        core.bus.write16(0x0500_0002, 0x001F); // BG palette 1 = 紅
+        core.bus.write16(0x0600_0000, 0x0000); // BG0 map tile 0
+        for i in 0..32 {
+            core.bus.write8(0x0600_4000 + i, 0x11);
+        }
+        // OAM 0：OBJ window sprite（attr0 mode 2）(0,0) 8x8、tile 0、4bpp；
+        // 全部 pixel 都唔透明，所以 window 範圍 = 0..8。
+        core.bus.write16(0x0700_0000, 0x0800);
+        for i in 0..8 {
+            core.bus.write32(0x0601_0000 + i * 4, 0x1111_1111);
+        }
+        core.run_frame().unwrap();
+        // window 內 (0,0) 見到 BG0 紅；窗外 (100,0) 冇 layer → backdrop 黑。
+        assert_eq!(&core.framebuffer()[0..3], &[0xFF, 0x00, 0x00]);
+        let out = (100 * 3) as usize;
+        assert_eq!(&core.framebuffer()[out..out + 3], &[0, 0, 0]);
+    }
 
     #[test]
     fn mode0_sprite_pixel() {

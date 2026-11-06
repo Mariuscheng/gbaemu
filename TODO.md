@@ -1069,3 +1069,24 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
   （`03ec38bb3bb491c5`，139.3 fps vs 6.7 fps，20.8×）、rates.gba 180 frames 有
   非靜音 PCM（max 10240）。
 - **產物**：`_native.pyd`、`dist/gbaemu-0.1.0-...whl` 重 build。
+
+## 預設 ROM 與存檔命名：唔再硬編 rom.gba、存檔用 ROM stem（2026-11-07）
+
+- **需求**：用戶把不同遊戲輪流改名做 `rom/rom.gba`，`rom.gba.sav` 會撞；
+  要求（1）預設唔再指定 `rom.gba`，改為讀 `rom/` 入面唯一的 `.gba`；
+  （2）存檔跟 ROM 同名 stem：`Dr_Mario.gba` → `Dr_Mario.sav`。
+- **改動**：
+  - `cli.find_roms()`：列 `rom/` 入面 `*.gba`（大小寫不拘、排序）；`main.py`
+    冇參數時用唯一那個，0 個／多個都給清楚錯誤（多個會列出並要求指定）。
+  - `GbaApp()` 冇傳 path 時同樣用 `find_roms()`；`tools/bench.py`、
+    `tools/smoke_real_rom.py` 的 `--rom` 預設改為自動偵測。
+  - 存檔：`memory/savedata.py` 新增 `save_path_for()`（`<rom stem>.sav`）同
+    `legacy_save_path_for()`（舊式 `<rom 全名>.sav`，只讀）。`NativeEmulator`
+    ／`Emulator` 寫檔一律用 stem；載入時先試 stem，再 fallback 舊式全名，
+    所以現有 `xxx.gba.sav` 唔會唔見。
+- **驗證**：`Dr_Mario.gba` 跑 2 frames + flush → 目錄只有 `Dr_Mario.gba`、
+  `Dr_Mario.sav`（EEPROM 8K，冇 `Dr_Mario.gba.sav`）；pytest 312 passed /
+  1 skipped；`main._default_rom()` 在只有一個 `.gba` 的 rom/ 回傳它。
+- **注意**：舊 `rom/rom.gba.sav` 要保留就手動改名做對應 `<game>.sav`；
+  只會 fallback 讀 `<rom 全名>.sav`（例如 `Dr_Mario.gba.sav`），唔會把
+  `rom.gba.sav` 當成 `Dr_Mario.gba` 的存檔。

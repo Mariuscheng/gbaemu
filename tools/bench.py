@@ -1,8 +1,10 @@
 """量測 gbaemu 的 frame throughput（模擬 GBA frame / host second）。
 
 用法（從 repo root 或安裝後皆可）：
-    python tools/bench.py --rom rom/rom.gba --frames 120
-    python tools/bench.py --rom rom/rom.gba --frames 30 --render
+    python tools/bench.py --rom rom/Dr_Mario.gba --frames 120
+    python tools/bench.py --rom rom/Dr_Mario.gba --frames 30 --render
+
+唔畀 ``--rom`` 時會用 ``rom/`` 入面唯一的 ``.gba``。
 """
 
 from __future__ import annotations
@@ -22,13 +24,20 @@ from gbaemu import BootMode, Emulator, EmulatorConfig, TimingMode, VideoMode  # 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rom", default="rom/rom.gba")
+    parser.add_argument("--rom", default=None, help="ROM 路徑；預設 rom/ 入面唯一的 .gba")
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--timing", choices=("functional", "timed"), default="functional")
     args = parser.parse_args()
     if args.frames <= 0:
         parser.error("--frames 必須大於 0")
+    if args.rom is None:
+        from gbaemu.cli import find_roms
+
+        candidates = find_roms("rom")
+        if len(candidates) != 1:
+            parser.error("rom/ 入面要有唯一 .gba，或用 --rom 指定")
+        args.rom = candidates[0]
 
     config = EmulatorConfig(
         boot_mode=BootMode.HLE_ADVANCED,

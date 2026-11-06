@@ -33,7 +33,7 @@
 | Keypad／KEYINPUT／KEYCNT | `bus/io.py`、`emulator.py` | `09-keypad` | GBA Keypad Input；KEYINPUT；KEYCNT | Phase 2 ✅ |
 | Interrupts／IME／IE／IF／stack | `cpu/arm7tdmi.py`、`hle/postboot.py`、`bus/io.py` | `10-interrupts` | GBA Interrupt Control；BIOS Interrupt handling；Default memory usage at 03007FXX | Phase 3 ✅ 2-cycle 延遲、HLE stub |
 | System control／WAITCNT／POSTFLG／prefetch | `bus/address_bus.py`、`cpu/cycles.py` | `11-system-control` | WAITCNT；POSTFLG；GBA GamePak Prefetch | Phase 2 ✅ WAITCNT；Phase 4 ✅ prefetch bug／prefetch-on |
-| Cartridge header／save media | `memory/cartridge.py`、`memory/savedata.py` | `12-cartridges` | GBA Cartridge Header；Backup Media；Complement check；Entry Point | Phase 3 ✅ SRAM/Flash/EEPROM、`<rom>.sav` 原子寫回 |
+| Cartridge header／save media | `memory/cartridge.py`、`memory/savedata.py` | `12-cartridges` | GBA Cartridge Header；Backup Media；Complement check；Entry Point | Phase 3 ✅ SRAM/Flash/EEPROM、`<rom stem>.sav` 原子寫回 |
 | CGB compatibility | （不支援） | `13-cgb-compatibility` | CGB Compatibility | 非範圍（規格 1） |
 | Unpredictable behavior | （研究參考） | `14-unpredictable` | Unpredictable Things | 參考；不主動模擬 |
 | ARM7TDMI／ARM/THUMB 指令 | `cpu/registers.py`、`cpu/arm7tdmi.py`、`cpu/arm.py`、`cpu/thumb.py`、`cpu/conditions.py` | `15-arm-cpu` | ARM CPU Register Set；ARM 32bit／16bit Instruction Set | Phase 1 ✅ |
@@ -68,7 +68,7 @@
 | Palette／OAM／VRAM 8-bit 寫入 | ✅ | Palette/BG VRAM 複製；OBJ VRAM／OAM 忽略 |
 | BIOS 讀取 | ✅ | HLE 固定近似＋`pc_in_bios` 讀取保護；production 不依賴真 BIOS |
 | I/O 暫存器 | ✅ | PPU／DMA／timer／sound 委派；其餘 raw storage |
-| SRAM／Flash／EEPROM | ✅ | 8-bit bus；wide store 只寫 1 byte；`<rom>.sav` auto-load／flush |
+| SRAM／Flash／EEPROM | ✅ | 8-bit bus；wide store 只寫 1 byte；`<rom stem>.sav` auto-load／flush |
 | ROM header | ✅ | complement check＋fixed value；不驗證 Nintendo logo（clean-room） |
 | HLE post-boot | ✅ | SP／mode／PC／banked SP／header copy／IRQ 指標清零 |
 | SWI dispatch | ✅ | 0x00–0x1F／0x26／0x27 handler；0x2B+ `HleUnsupportedSwiError` |

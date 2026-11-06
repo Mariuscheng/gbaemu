@@ -12,6 +12,24 @@
                   （寫：bit0 為資料位；讀：回傳 0 或 1）
 """
 
+from pathlib import Path
+
+
+def save_path_for(rom_path: str | Path) -> Path:
+    """電池存檔主檔名：``Dr_Mario.gba`` → ``Dr_Mario.sav``。
+
+    用 ROM 的 stem（唔係全名）令每個 ROM 有自己一份存檔；之前用
+    ``<rom 全名>.sav``，只要所有遊戲都叫 ``rom.gba`` 就會撞存檔。
+    """
+
+    return Path(rom_path).with_suffix(".sav")
+
+
+def legacy_save_path_for(rom_path: str | Path) -> Path:
+    """舊式 ``<rom 全名>.sav``（例如 ``Dr_Mario.gba.sav``），只作載入相容。"""
+
+    return Path(str(rom_path) + ".sav")
+
 
 class SaveSRAM:
     """SRAM 32KB：直接 byte 存取（資料匯流排 8-bit，16/32-bit 存取重複 byte）"""

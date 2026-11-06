@@ -33,22 +33,45 @@ if (
         pass  # 無法 re-exec 時照原 interpreter 繼續，讓後續給出清楚的錯誤
 
 from gbaemu import GbaApp  # noqa: E402
+from gbaemu.cli import find_roms  # noqa: E402
+
+
+def _default_rom() -> Path:
+    """``rom/`` 入面唯一的 ``.gba``；冇／多個就報錯。"""
+
+    candidates = find_roms("rom")
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise SystemExit(
+            "rom/ 入面冇 .gba 檔。\n"
+            "本專案唔會分發 ROM／BIOS；請自行準備，例如：\n"
+            "  python main.py path/to/game.gba\n"
+            "或將 ROM 放入 rom/（見 rom/README.md）。"
+        )
+    listing = "\n".join(f"  {path.name}" for path in candidates)
+    raise SystemExit(
+        f"rom/ 入面有多個 .gba 檔：\n{listing}\n"
+        "請指定其中一個，例如：\n"
+        f'  python main.py "rom/{candidates[0].name}"'
+    )
+
 
 def main() -> None:
-    rom = sys.argv[1] if len(sys.argv) > 1 else "rom/rom.gba"
-    if not Path(rom).exists():
+    rom = Path(sys.argv[1]) if len(sys.argv) > 1 else _default_rom()
+    if not rom.exists():
         raise SystemExit(
             f"找不到 ROM：{rom}\n"
             "本專案唔會分發 ROM／BIOS；請自行準備，例如：\n"
             "  python main.py path/to/game.gba\n"
-            "或將 ROM 放在 rom/rom.gba（見 rom/README.md）。"
+            "或將 ROM 放入 rom/（見 rom/README.md）。"
         )
-    app = GbaApp(rom, window="SDL3", sound="100")
+    app = GbaApp(str(rom), window="SDL3", sound="100")
     try:
         while app.tick():
             pass
     finally:
-        # 即使 Ctrl+C／例外結束都要寫回電池存檔（<rom>.sav）。
+        # 即使 Ctrl+C／例外結束都要寫回電池存檔（<rom stem>.sav）。
         app.stop()
 
 

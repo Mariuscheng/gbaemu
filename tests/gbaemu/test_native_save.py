@@ -3,7 +3,7 @@
 Rust core 本身有 SRAM／Flash／序列 EEPROM；這裡驗證：
 1. save media 偵測同 Python reference 一致；
 2. EEPROM 位元協定（遊戲以 DMA 送出的形式）寫入／讀回正確；
-3. ``cartridge_flush_to_disk()`` 會原子寫出 ``<rom>.sav``，重開會載返；
+3. ``cartridge_flush_to_disk()`` 會原子寫出 ``<rom stem>.sav``，重開會載返；
 4. ``reset()`` 唔會清掉電池存檔；
 5. 同 Python reference 的 ``.sav`` 互通。
 """
@@ -83,7 +83,7 @@ def test_flush_writes_sav_and_reloads(tmp_path):
     value = 0xDEADBEEFCAFEF00D
     _eeprom_write(emu.memory, 0x2A, value)
     emu.cartridge_flush_to_disk()
-    sav = Path(str(path) + ".sav")
+    sav = path.with_suffix(".sav")
     assert sav.exists()
     assert sav.stat().st_size == 0x2000
     emu.close()
@@ -142,7 +142,7 @@ def test_python_reference_sav_loads_in_native(tmp_path):
 
 def test_mismatched_sav_size_is_ignored(tmp_path):
     path = _rom(tmp_path / "bad.gba", b"SRAM_V113")
-    Path(str(path) + ".sav").write_bytes(b"\x12\x34")
+    path.with_suffix(".sav").write_bytes(b"\x12\x34")
     emu = NativeEmulator.from_rom(path)
     assert bytes(emu._core.save_ram()) == b"\xFF" * 0x8000
     emu.close()
@@ -206,7 +206,7 @@ def test_gbaapp_stop_flushes_battery_save(tmp_path):
     app.emu.memory.write_u8(0x0E000010, 0x88)
     app.stop()
 
-    sav = Path(str(path) + ".sav")
+    sav = path.with_suffix(".sav")
     assert sav.exists()
     assert sav.stat().st_size == 0x8000
     assert sav.read_bytes()[0] == 0x77
@@ -223,7 +223,7 @@ def test_gbaapp_stop_skips_sav_when_game_did_not_save(tmp_path):
     assert app.emu.battery_dirty is False
     app.stop()
 
-    assert not Path(str(path) + ".sav").exists()
+    assert not path.with_suffix(".sav").exists()
 
 
 def test_battery_dirty_tracks_save_writes(tmp_path):
@@ -234,3 +234,22 @@ def test_battery_dirty_tracks_save_writes(tmp_path):
     emu.cartridge_flush_to_disk()
     assert emu.battery_dirty is False
     emu.close()
+
+
+def test_save_uses_rom_stem_and_reads_legacy(tmp_path):
+    """``Dr_Mario.gba`` → ``Dr_Mario.sav``；舊式 ``Dr_Mario.gba.sav`` 仍可讀。"""
+
+    path = _rom(tmp_path / "Dr_Mario.gba", b"SRAM_V113")
+    emu = NativeEmulator.from_rom(path)
+    assert emu.save_path == path.with_suffix(".sav")
+    emu.memory.write_u8(0x0E000000, 0x5A)
+    emu.cartridge_flush_to_disk()
+    assert path.with_suffix(".sav").exists()
+    assert not Path(str(path) + ".sav").exists()
+    emu.close()
+
+    legacy = _rom(tmp_path / "Legacy.gba", b"SRAM_V113")
+    Path(str(legacy) + ".sav").write_bytes(b"\x77" + b"\xFF" * 0x7FFF)
+    old = NativeEmulator.from_rom(legacy)
+    assert bytes(old._core.save_ram())[0] == 0x77
+    old.close()

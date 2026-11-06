@@ -40,6 +40,7 @@ class NativeEmulator:
     ) -> None:
         from . import _native as _ext  # lazy：未 build extension 時不影響 import
         from .memory.cartridge import RomCartridge
+        from .memory.savedata import save_path_for
 
         self._config = config or EmulatorConfig()
         self._rom = rom
@@ -52,7 +53,7 @@ class NativeEmulator:
             bios_data = Path(self._config.bios_path).read_bytes()
             self._core.load_bios(bios_data)
         self._save_path = (
-            Path(str(self._rom_path) + ".sav") if self._rom_path is not None else None
+            save_path_for(self._rom_path) if self._rom_path is not None else None
         )
         self._load_save_file()
         self._save_baseline = bytes(self._core.save_ram())
@@ -154,7 +155,7 @@ class NativeEmulator:
         self._paused = True
 
     def cartridge_flush_to_disk(self) -> None:
-        """把備份記憶體原子寫回 ``<rom>.sav``（規格 5.7：不自動寫回）。"""
+        """把備份記憶體原子寫回 ``<rom stem>.sav``（規格 5.7：不自動寫回）。"""
 
         self._ensure_open()
         if self._core.save_kind() == "none":
@@ -168,15 +169,22 @@ class NativeEmulator:
         self._save_baseline = data
 
     def _load_save_file(self) -> None:
-        """若 ``<rom>.sav`` 存在且大小相符，載入備份記憶體。"""
+        """先讀 ``<rom stem>.sav``，冇就退回舊式 ``<rom 全名>.sav``。"""
 
-        if self._save_path is None or not self._save_path.exists():
+        if self._rom_path is None:
             return
-        data = self._save_path.read_bytes()
-        try:
-            self._core.load_save_ram(data)
-        except ValueError as exc:
-            logger.warning("save 檔大小不符（%s），忽略 %s", exc, self._save_path)
+        from .memory.savedata import legacy_save_path_for
+
+        for path in (self._save_path, legacy_save_path_for(self._rom_path)):
+            if path is None or not path.exists():
+                continue
+            data = path.read_bytes()
+            try:
+                self._core.load_save_ram(data)
+            except ValueError as exc:
+                logger.warning("save 檔大小不符（%s），忽略 %s", exc, path)
+                continue
+            return
 
     @property
     def battery_dirty(self) -> bool:
@@ -190,7 +198,7 @@ class NativeEmulator:
 
     @property
     def save_path(self) -> Path | None:
-        """電池存檔路徑（``<rom>.sav``）；無 ROM 路徑時為 ``None``。"""
+        """電池存檔路徑（``<rom stem>.sav``）；無 ROM 路徑時為 ``None``。"""
 
         return self._save_path
 

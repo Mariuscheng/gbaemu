@@ -2,7 +2,7 @@
 
 用法（repo root）：
 
-    .\\venv\\Scripts\\python.exe tools\\smoke_real_rom.py --rom rom/rom.gba --frames 120
+    .\\venv\\Scripts\\python.exe tools\\smoke_real_rom.py --rom rom/Dr_Mario.gba --frames 120
 """
 
 from __future__ import annotations
@@ -46,9 +46,16 @@ def run_native(rom: Path, frames: int) -> tuple[bytes, float]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--rom", type=Path, default=Path("rom/rom.gba"))
+    parser.add_argument("--rom", type=Path, default=None)
     parser.add_argument("--frames", type=int, default=120)
     args = parser.parse_args()
+    if args.rom is None:
+        from gbaemu.cli import find_roms
+
+        candidates = find_roms("rom")
+        if len(candidates) != 1:
+            parser.error("rom/ 入面要有唯一 .gba，或用 --rom 指定")
+        args.rom = candidates[0]
     if not args.rom.exists():
         raise SystemExit(f"missing ROM: {args.rom}")
     if args.frames < 1:

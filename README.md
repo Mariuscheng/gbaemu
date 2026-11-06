@@ -19,7 +19,7 @@ PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gba
 | Rust core | `crates/gbaemu-core`（CPU／bus／PPU／DMA／timer／IRQ／audio／save media）＋PyO3 `gbaemu._native`；GUI 預設後端 | ✅ |
 | GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav` 自動載入／原子寫回 | ✅ |
 
-已驗證：`pytest tests -q` → **309 passed, 1 skipped**（已 build Rust core；
+已驗證：`pytest tests -q` → **312 passed, 1 skipped**（已 build Rust core；
 未 build 的 fresh clone 為 281 passed, 3 skipped，native 測試自動 skip）；
 `cargo test` → **109 passed**；硬體測試 ROM（外部 `test-rom/`）Memory 1552/1552、
 DMA 1256/1256、BIOS math 615/615 等（見 [`docs/architecture/MIGRATION.md`](docs/architecture/MIGRATION.md)）。
@@ -89,7 +89,7 @@ GUI 預設用 Rust `NativeEmulator`，比 Python reference 快幾十倍。build 
 ## 快速開始
 
 ```powershell
-# 預設讀 rom/rom.gba；亦可直接指定路徑
+# 預設讀 rom/ 入面唯一的 .gba；亦可直接指定路徑
 .\venv\Scripts\python.exe main.py
 .\venv\Scripts\python.exe main.py "D:\games\some_game.gba"
 ```
@@ -99,18 +99,20 @@ GUI 預設用 Rust `NativeEmulator`，比 Python reference 快幾十倍。build 
 ```python
 from gbaemu import GbaApp
 
-app = GbaApp("rom/rom.gba", window="SDL3", sound="100")
+app = GbaApp("rom/Dr_Mario.gba", window="SDL3", sound="100")
 try:
     while app.tick():
         pass
 finally:
-    app.stop()  # 寫回 <rom>.sav
+    app.stop()  # 寫回 <rom stem>.sav
 ```
 
 `window="null"` 為 headless；SDL3 視窗需要 pygame-ce 與可用的顯示環境，失敗會
 退回 headless。視窗接受方向鍵／Z／X／Enter／Backspace／A／S，關閉視窗會讓
-`tick()` 回傳 False。電池存檔寫在 ROM 旁邊的 `<rom>.sav`（SRAM 32 KiB／
-Flash 64 KiB／128 KiB／EEPROM 512 B／8 KiB 自動偵測），下次開啟自動載入。
+`tick()` 回傳 False。電池存檔寫在 ROM 旁邊、跟 ROM **同一個 stem** 的 `.sav`
+（`Dr_Mario.gba` → `Dr_Mario.sav`；SRAM 32 KiB／Flash 64 KiB／128 KiB／
+EEPROM 512 B／8 KiB 自動偵測），下次開啟自動載入。舊式 `<rom 全名>.sav`
+（例如 `Dr_Mario.gba.sav`）仍然會讀取，但新存檔一律用 stem 命名。
 **只有遊戲真正寫入備份記憶體（手動存檔）時才會更新 `.sav`**；純粹開遊戲
 唔會改動現有存檔。需要強制寫回可呼叫 `app.save_battery()`。
 
@@ -126,7 +128,7 @@ Flash 64 KiB／128 KiB／EEPROM 512 B／8 KiB 自動偵測），下次開啟自�
 from gbaemu.rl import GBAEnv, GBAEnvConfig, ObservationConfig, ActionSpec
 
 env = GBAEnv(
-    "rom/rom.gba",
+    "rom/Dr_Mario.gba",
     config=GBAEnvConfig(
         observation=ObservationConfig(source="screen", grayscale=True, resize=(84, 84)),
         action=ActionSpec(mode="multi_binary"),

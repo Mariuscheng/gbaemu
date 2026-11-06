@@ -72,7 +72,7 @@ app.stop()
   GBA 按鍵。
 - `sound="100"`：啟用音訊緩衝（`AudioMode.BUFFERED`）；`None`／`0`：靜音。
 - 不需要 `bios=`：預設進階 HLE 是 canonical 啟動路徑；`bios=` 只留給使用者自備的 optional legacy／differential，不進 CI。
-- `.sav` 會寫在 ROM 旁（`<rom>.sav`），由 `stop(save=True)` 或
+- `.sav` 會寫在 ROM 旁（`<rom stem>.sav`），由 `stop(save=True)` 或
   `cartridge_flush_to_disk()` 觸發。
 
 倉庫根目錄的 `main.py` 是開發用主程式：它偵測到自己在「套件根」（同層有

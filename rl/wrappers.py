@@ -47,7 +47,7 @@ class GbaApp:
 
     def __init__(
         self,
-        path: str | Path = "rom/rom.gba",
+        path: str | Path | None = None,
         window: str = "null",
         bios: str | None = None,
         verify_logo: bool = True,
@@ -71,6 +71,13 @@ class GbaApp:
         )
         if bios and Path(bios).exists():
             config = replace(config, bios_path=Path(bios))
+        if path is None:
+            from ..cli import find_roms
+
+            candidates = find_roms("rom")
+            if len(candidates) != 1:
+                raise GbaEmuError("請指定 ROM 路徑（rom/ 入面要有唯一 .gba）")
+            path = candidates[0]
         self._emu = self._make_backend(path, config)
         self._audio_enabled = audio is AudioMode.BUFFERED
         self._audio_ok = False
@@ -337,7 +344,7 @@ class GbaApp:
             self._pg = None
 
     def save_battery(self) -> None:
-        """明確寫回電池存檔 ``<rom>.sav``（唔理 dirty 狀態）。"""
+        """明確寫回電池存檔 ``<rom stem>.sav``（唔理 dirty 狀態）。"""
 
         self._emu.cartridge_flush_to_disk()
 

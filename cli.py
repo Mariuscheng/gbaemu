@@ -15,6 +15,26 @@ from .errors import GbaEmuError
 from .memory.cartridge import load_rom_file, parse_rom_header
 
 
+def find_roms(directory: str | Path = "rom") -> list[Path]:
+    """列出 ``directory`` 入面的 ``.gba`` 檔（大小寫不拘，按檔名排序）。
+
+    ``python main.py`` 唔再硬編 ``rom/rom.gba``：目錄入面只有一個 ROM 時
+    自動用它；多過一個就由 caller 要求用戶指定，避免載錯遊戲／撞存檔。
+    """
+
+    folder = Path(directory)
+    if not folder.is_dir():
+        return []
+    return sorted(
+        (
+            path
+            for path in folder.iterdir()
+            if path.is_file() and path.suffix.lower() == ".gba"
+        ),
+        key=lambda path: path.name.lower(),
+    )
+
+
 def _inspect_payload(path: Path, rom: bytes) -> dict:
     header = parse_rom_header(rom)
     # dict 插入順序 = JSON 欄位順序（穩定，供 CI 解析）。
@@ -99,4 +119,4 @@ def main(argv: list[str] | None = None) -> int:
     return args.func(args)
 
 
-__all__ = ["build_parser", "main"]
+__all__ = ["build_parser", "find_roms", "main"]

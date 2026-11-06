@@ -46,6 +46,7 @@ from .hle.swi_impl import build_handlers
 from .hle.swi_table import SwiTable
 from .log import get_logger
 from .memory.cartridge import RomCartridge, RomHeader, load_rom_file
+from .memory.savedata import legacy_save_path_for, save_path_for
 from .state.snapshot import (
     SECTION_BUS,
     SECTION_CPU,
@@ -379,14 +380,14 @@ class Emulator:
         self.events.clear()
 
     def cartridge_flush_to_disk(self) -> None:
-        """把備份記憶體原子寫回 ``<rom>.sav``（規格 5.7：不自動寫回）。"""
+        """把備份記憶體原子寫回 ``<rom stem>.sav``（規格 5.7：不自動寫回）。"""
 
         self._ensure_open()
         if self._cartridge.save is None:
             raise GbaEmuError("cartridge 沒有 save 媒體")
         if self._rom_path is None:
             raise GbaEmuError("cartridge 沒有 ROM 路徑，無法寫回磁碟")
-        target = Path(str(self._rom_path) + ".sav")
+        target = save_path_for(self._rom_path)
         temporary = target.with_name(target.name + ".tmp")
         data = self._cartridge.save.export()
         temporary.write_bytes(data)
@@ -445,24 +446,25 @@ class Emulator:
     # 內部
     # ------------------------------------------------------------------
     def _load_save_file(self, rom_path: Path) -> None:
-        """若 ``<rom>.sav`` 存在且大小相符，載入備份記憶體。"""
+        """先讀 ``<rom stem>.sav``，冇就退回舊式 ``<rom 全名>.sav``。"""
 
         save = self._cartridge.save
         if save is None:
             return
-        path = Path(str(rom_path) + ".sav")
-        if not path.exists():
+        for path in (save_path_for(rom_path), legacy_save_path_for(rom_path)):
+            if not path.exists():
+                continue
+            data = path.read_bytes()
+            if len(data) != len(save.export()):
+                logger.warning(
+                    "save 檔大小不符（%d != %d），忽略 %s",
+                    len(data),
+                    len(save.export()),
+                    path,
+                )
+                continue
+            save.load(data)
             return
-        data = path.read_bytes()
-        if len(data) != len(save.export()):
-            logger.warning(
-                "save 檔大小不符（%d != %d），忽略 %s",
-                len(data),
-                len(save.export()),
-                path,
-            )
-            return
-        save.load(data)
 
     def _load_bios(self, config: EmulatorConfig) -> bytes | None:
         if config.bios_path is None:

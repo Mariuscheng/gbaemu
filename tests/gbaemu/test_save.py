@@ -174,7 +174,7 @@ def test_flush_and_autoload_save_file(tmp_path):
     emu.memory.write_u8(0x0E000000, 0x99)
     emu.cartridge_flush_to_disk()
 
-    save_path = Path(str(path) + ".sav")
+    save_path = path.with_suffix(".sav")
     assert save_path.exists()
     assert save_path.read_bytes()[0] == 0x99
 
@@ -182,6 +182,30 @@ def test_flush_and_autoload_save_file(tmp_path):
         path, config=EmulatorConfig(boot_mode=BootMode.TEST_ROM_ONLY)
     )
     assert emu2.memory.read_u8(0x0E000000) == 0x99
+
+
+def test_save_path_uses_rom_stem_and_reads_legacy(tmp_path):
+    """``Dr_Mario.gba`` → ``Dr_Mario.sav``；舊式 ``Dr_Mario.gba.sav`` 仍可讀。"""
+
+    path = tmp_path / "Dr_Mario.gba"
+    path.write_bytes(_program_rom(SRAM_ID, arm_words(0xEAFFFFFE)))
+    emu = Emulator.from_rom(
+        path, config=EmulatorConfig(boot_mode=BootMode.TEST_ROM_ONLY)
+    )
+    emu.memory.write_u8(0x0E000000, 0x5A)
+    emu.cartridge_flush_to_disk()
+    assert path.with_suffix(".sav").exists()
+    assert not Path(str(path) + ".sav").exists()
+    emu.close()
+
+    legacy = tmp_path / "Legacy.gba"
+    legacy.write_bytes(_program_rom(SRAM_ID, arm_words(0xEAFFFFFE)))
+    Path(str(legacy) + ".sav").write_bytes(b"\x77" + b"\xFF" * 0x7FFF)
+    old = Emulator.from_rom(
+        legacy, config=EmulatorConfig(boot_mode=BootMode.TEST_ROM_ONLY)
+    )
+    assert old.memory.read_u8(0x0E000000) == 0x77
+    old.close()
 
 
 def test_python_battery_dirty_tracks_save_writes(tmp_path):

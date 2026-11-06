@@ -7,7 +7,7 @@ import os
 import subprocess
 import sys
 
-from gbaemu.cli import main
+from gbaemu.cli import find_roms, main
 
 from .helpers import ROOT
 
@@ -115,3 +115,14 @@ def test_module_help_subprocess():
     )
     assert completed.returncode == 0
     assert "inspect-rom" in completed.stdout
+
+
+def test_find_roms_discovers_gba_by_extension(tmp_path):
+    assert find_roms(tmp_path) == []
+    assert find_roms(tmp_path / "missing") == []
+    (tmp_path / "notes.txt").write_text("x")
+    (tmp_path / "rom.gba.sav").write_bytes(b"x")
+    assert find_roms(tmp_path) == []
+    (tmp_path / "Dr_Mario.gba").write_bytes(b"x")
+    (tmp_path / "Other.GBA").write_bytes(b"x")
+    assert [path.name for path in find_roms(tmp_path)] == ["Dr_Mario.gba", "Other.GBA"]

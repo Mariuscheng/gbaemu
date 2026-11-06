@@ -1024,7 +1024,7 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
   `test_battery_dirty_tracks_save_writes`（native）、
   `test_python_battery_dirty_tracks_save_writes`（Python）。
 
-## README「已知缺口」核對：OBJ window、DMA Sound repeat、SOUNDBIAS、wave RAM bank（2026-11-07）
+## README「已知缺口」核對：OBJ window、DMA Sound repeat、SOUNDBIAS、wave RAM bank（2026-11-06）
 
 - **背景**：用戶問 README 4 項係咪真未實作；逐項核對 code 之後，今輪補咗
   OBJ window 同 DMA Sound repeat 兩項。
@@ -1070,7 +1070,7 @@ l/wrappers.py 每 frame 把 549 samples 的 Sound
   非靜音 PCM（max 10240）。
 - **產物**：`_native.pyd`、`dist/gbaemu-0.1.0-...whl` 重 build。
 
-## 預設 ROM 與存檔命名：唔再硬編 rom.gba、存檔用 ROM stem（2026-11-07）
+## 預設 ROM 與存檔命名：唔再硬編 rom.gba、存檔用 ROM stem（2026-11-06）
 
 - **需求**：用戶把不同遊戲輪流改名做 `rom/rom.gba`，`rom.gba.sav` 會撞；
   要求（1）預設唔再指定 `rom.gba`，改為讀 `rom/` 入面唯一的 `.gba`；

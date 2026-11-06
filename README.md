@@ -13,20 +13,20 @@ PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gba
 | 範圍 | 內容 | 狀態 |
 |---|---|---|
 | Phase 0–2 | 套件骨架、ROM header、HLE boot、ARM7TDMI ARM/THUMB、bus／例外、PPU、Mode 3/4/5、frame boundary | ✅ |
-| Phase 3 | DMA（含 DMA Sound FIFO）、timers、IRQ／Halt／IntrWait、SWI、save media、snapshot | ✅ |
+| Phase 3 | DMA（含 DMA Sound FIFO／repeat 語意）、timers、IRQ／Halt／IntrWait、SWI、save media、snapshot | ✅ |
 | Phase 4 | 音訊 PSG 4 聲道＋DMA Sound（FIFO repeat 語意）、Mode 0/1/2＋sprites／WIN0／WIN1／OBJ window／mosaic／blending、video contention | ✅ |
 | Phase 5 | `GBAEnv`、`GbaApp` facade、frame skip、snapshot branching、Gymnasium `check_env` | ✅ |
 | Rust core | `crates/gbaemu-core`（CPU／bus／PPU／DMA／timer／IRQ／audio／save media）＋PyO3 `gbaemu._native`；GUI 預設後端 | ✅ |
-| GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav` 自動載入／原子寫回 | ✅ |
+| GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav`（ROM stem 命名）自動載入／原子寫回 | ✅ |
 
 已驗證：`pytest tests -q` → **312 passed, 1 skipped**（已 build Rust core；
-未 build 的 fresh clone 為 281 passed, 3 skipped，native 測試自動 skip）；
+未 build 的 fresh clone 為 288 passed, 3 skipped，native 測試自動 skip）；
 `cargo test` → **109 passed**；硬體測試 ROM（外部 `test-rom/`）Memory 1552/1552、
 DMA 1256/1256、BIOS math 615/615 等（見 [`docs/architecture/MIGRATION.md`](docs/architecture/MIGRATION.md)）。
 
 已知缺口（詳見 [`TODO.md`](TODO.md)）：
 
-- SOUNDBIAS／PWM（9-bit）輸出未模擬（DMA Sound repeat／count 語意 2026-11-07 已補）
+- SOUNDBIAS／PWM（9-bit）輸出未模擬（DMA Sound repeat／count 語意 2026-11-06 已補）
 - wave RAM bank 時序未模擬；timer count-up 已實作，剩部分 IRQ 邊界
 - Timing 測試 1852/2020（mGBA accounting）；BIOS 精確度與 SIO 部分行為
 - RL process pool／trace replay 未實作
@@ -109,12 +109,20 @@ finally:
 
 `window="null"` 為 headless；SDL3 視窗需要 pygame-ce 與可用的顯示環境，失敗會
 退回 headless。視窗接受方向鍵／Z／X／Enter／Backspace／A／S，關閉視窗會讓
-`tick()` 回傳 False。電池存檔寫在 ROM 旁邊、跟 ROM **同一個 stem** 的 `.sav`
-（`Dr_Mario.gba` → `Dr_Mario.sav`；SRAM 32 KiB／Flash 64 KiB／128 KiB／
-EEPROM 512 B／8 KiB 自動偵測），下次開啟自動載入。舊式 `<rom 全名>.sav`
-（例如 `Dr_Mario.gba.sav`）仍然會讀取，但新存檔一律用 stem 命名。
-**只有遊戲真正寫入備份記憶體（手動存檔）時才會更新 `.sav`**；純粹開遊戲
-唔會改動現有存檔。需要強制寫回可呼叫 `app.save_battery()`。
+`tick()` 回傳 False。
+
+### ROM 與存檔命名
+
+- **預設 ROM**：`python main.py` 會掃 `rom/` 入面唯一的 `.gba`（檔名任你改，
+  例如 `Dr_Mario.gba`）；有多個就報錯並列出，要你用
+  `python main.py "rom/Dr_Mario.gba"` 指定。
+- **存檔**：寫在 ROM 旁邊、跟 ROM 同一個 stem 的 `.sav`
+  （`Dr_Mario.gba` → `Dr_Mario.sav`；SRAM 32 KiB／Flash 64 KiB／128 KiB／
+  EEPROM 512 B／8 KiB 自動偵測），下次開啟自動載入。
+- 舊式 `<rom 全名>.sav`（例如 `Dr_Mario.gba.sav`）仍然會讀取；之前用
+  `rom.gba` 留下的 `rom.gba.sav` 要保留就自己改名做 `Dr_Mario.sav`。
+- **只有遊戲真正寫入備份記憶體（手動存檔）時才會更新 `.sav`**；純粹開遊戲
+  唔會改動現有存檔。需要強制寫回可呼叫 `app.save_battery()`。
 
 ### CLI
 

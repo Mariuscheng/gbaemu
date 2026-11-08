@@ -70,21 +70,31 @@ class GbaApp:
         scale: int = 4,
         sound=None,
         throttle: bool = True,
+        config: EmulatorConfig | None = None,
         **kwargs,
     ) -> None:
         del verify_logo, kwargs
-        audio = (
-            AudioMode.BUFFERED
-            if sound not in (None, False, 0, "0", "none")
-            else AudioMode.DISABLED
-        )
-        config = EmulatorConfig(
-            boot_mode=BootMode.HLE_ADVANCED,
-            video=VideoMode.FRAMEBUFFER,
-            audio=audio,
-            timing=TimingMode.FUNCTIONAL,
-            hle_strict=False,
-        )
+        if config is None:
+            audio = (
+                AudioMode.BUFFERED
+                if sound not in (None, False, 0, "0", "none")
+                else AudioMode.DISABLED
+            )
+            config = EmulatorConfig(
+                boot_mode=BootMode.HLE_ADVANCED,
+                video=VideoMode.FRAMEBUFFER,
+                audio=audio,
+                timing=TimingMode.FUNCTIONAL,
+                hle_strict=False,
+            )
+        elif sound is not None:
+            # 明確傳 sound 時，佢覆寫 config.audio；sound=None 就保留 config。
+            audio = (
+                AudioMode.BUFFERED
+                if sound not in (False, 0, "0", "none")
+                else AudioMode.DISABLED
+            )
+            config = replace(config, audio=audio)
         if bios and Path(bios).exists():
             config = replace(config, bios_path=Path(bios))
         if path is None:
@@ -95,7 +105,7 @@ class GbaApp:
                 raise GbaEmuError("請指定 ROM 路徑（rom/ 入面要有唯一 .gba）")
             path = candidates[0]
         self._emu = self._make_backend(path, config)
-        self._audio_enabled = audio is AudioMode.BUFFERED
+        self._audio_enabled = config.audio is AudioMode.BUFFERED
         self._audio_ok = False
         self._audio_channel = None
         self._audio_rate = 32768
@@ -178,6 +188,16 @@ class GbaApp:
         return self._emu.game_area(
             layer=layer, include_attributes=include_attributes
         )
+
+    def step_cycles(self, cycles: int):
+        """直接行 cycle（``app.emu.step_cycles()`` 的 shortcut）。"""
+
+        return self._emu.step_cycles(cycles)
+
+    def run_until(self, event, *, max_cycles: int):
+        """行到下一個事件（``app.emu.run_until()`` 的 shortcut）。"""
+
+        return self._emu.run_until(event, max_cycles=max_cycles)
 
     # -- backend 選擇 ----------------------------------------------------
     def _make_backend(self, path, config):
@@ -437,11 +457,21 @@ class GbaApp:
         self.button(name, False)
 
     # -- 存檔 ------------------------------------------------------------
-    def save_state(self, path: str | Path) -> None:
-        Path(path).write_bytes(self._emu.save_state())
+    def save_state(self, path: str | Path | None = None) -> bytes:
+        """回傳 snapshot bytes；有 ``path`` 就順便寫檔。"""
 
-    def load_state(self, path: str | Path) -> None:
-        self._emu.load_state(Path(path).read_bytes())
+        data = self._emu.save_state()
+        if path is not None:
+            Path(path).write_bytes(data)
+        return data
+
+    def load_state(self, data: str | Path | bytes | bytearray | memoryview) -> None:
+        """載入 snapshot；可以傳 bytes 或者檔案路徑。"""
+
+        if isinstance(data, (bytes, bytearray, memoryview)):
+            self._emu.load_state(bytes(data))
+        else:
+            self._emu.load_state(Path(data).read_bytes())
 
 
 __all__ = ["GbaApp", "Screen"]

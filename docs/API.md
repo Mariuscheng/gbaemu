@@ -956,7 +956,26 @@ finally:
 | `scale` | `4` | 視窗倍率 |
 | `sound` | `None` | 非 false 值 → `AudioMode.BUFFERED`；只係開關，`"100"` 唔代表音量 |
 | `throttle` | `True` | 實時節流 |
+| `config` | `None` | 自訂 `EmulatorConfig`；`None` 用預設（`FRAMEBUFFER`／`FUNCTIONAL`／`hle_strict=False`） |
 | `**kwargs` | — | 目前忽略 |
+
+`config` 的優先順序：
+
+```python
+from gbaemu import EmulatorConfig, TimingMode, VideoMode
+
+app = GbaApp(
+    "rom/game.gba",
+    config=EmulatorConfig(timing=TimingMode.TIMED, video=VideoMode.OFF),
+)
+```
+
+- 有傳 `config` 就完全使用它，唔會再套用預設值；
+- 同 `sound` 一齊用時，`sound=None` 保留 `config.audio`，非 `None` 的
+  `sound` 會覆寫 `config.audio`；
+- `bios` 檔案存在時會覆寫 `config.bios_path`；
+- `config.video=OFF` 時 framebuffer 唔會更新，`screen.ndarray` 會係全零；
+  要畫面就保持 `VideoMode.FRAMEBUFFER`。
 
 > `window="null"` 時唔會初始化 pygame mixer，所以`sound` 冇實際聲音輸出；
 > 但 config 仍然係 `BUFFERED`，可以經 `app.audio.read_buffer()` 拿 PCM。
@@ -1012,6 +1031,8 @@ print("player area:", area[8:12, 10:20])
 方法：
 
 ```python
+from gbaemu import EventKind
+
 app.tick(count=1, render=True, sound=True) -> bool
 app.stop(save=True) -> None
 app.save_battery() -> None            # 強制寫 .sav
@@ -1020,9 +1041,13 @@ app.button("a", True)                 # 按
 app.button_press("start")
 app.button_release("start")
 
-app.save_state("slot1.state")         # 寫檔案
-app.load_state("slot1.state")
+app.step_cycles(1000)                 # 等於 app.emu.step_cycles(1000)
+app.run_until(EventKind.VBLANK_START, max_cycles=1_000_000)
 
+blob = app.save_state()               # -> bytes（in-memory）
+converted = app.save_state("slot1.state")   # 寫檔，亦回傳 bytes
+app.load_state(blob)                  # 載入 bytes
+app.load_state("slot1.state")         # 載入檔案
 app.game_area()                       # BG tile map（見 §12.1）
 app.game_area(layer=0, include_attributes=True)
 

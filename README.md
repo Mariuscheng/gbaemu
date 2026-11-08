@@ -68,7 +68,7 @@ ROM（外部 `test-rom/`）Memory 1552/1552、DMA 1256/1256、BIOS math 615/615 
 ## 安裝
 
 需要 Python 3.11+（開發用 3.14 free-threaded）。核心模擬器零外部依賴；
-RL 需要 numpy，GUI 需要 pygame-ce。套件本身唔含 ROM／BIOS，亦唔含 tests。
+RL 需要 numpy，GUI 需要 pygame-ce。套件本身不含 ROM／BIOS，亦不含 tests。
 
 **安裝成 site-packages（推荐畀普通使用者）**
 

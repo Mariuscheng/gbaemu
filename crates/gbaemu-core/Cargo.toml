@@ -1,0 +1,16 @@
+[package]
+name = "gbaemu-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "GBA emulator core (migration skeleton; Python reference remains canonical until parity)"
+license = "MIT"
+
+[lib]
+name = "gbaemu_core"
+path = "src/lib.rs"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

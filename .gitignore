@@ -1,0 +1,141 @@
+# ============================================================
+# gbaemu .gitignore
+# 原則：只將「原始碼、測試、文件、打包設定」上 GitHub；
+# 本機環境、建置產物、ROM／BIOS／存檔、除錯證據一律唔上載。
+# ============================================================
+
+# --- 使用者自備 ROM／BIOS／電池存檔（絕對唔上載）---
+rom/*
+!rom/README.md
+roms/
+*.gba
+*.agb
+*.gbs
+*.sav
+*.srm
+*.fla
+*.eep
+gba_bios.bin
+bios.bin
+*.bios
+
+# --- 本機測試素材／除錯證據（repo 以外提供）---
+test-rom/
+debug_evidence/
+evidence/
+traces/
+trace/
+captures/
+screenshots/
+ref_*.bmp
+*.trace
+*.trace.jsonl
+*.dump
+*.dmp
+*.core
+core.*
+*.log
+*.pcap
+
+# --- Python 環境／快取 ---
+venv/
+.venv/
+env/
+.venv*/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.tox/
+.nox/
+.hypothesis/
+.ipynb_checkpoints/
+.cache/
+.pytest_tmp/
+
+# --- Python 建置產物／封面 ---
+build/
+dist/
+dist_native/
+*.whl
+*.tar.gz
+*.zip
+
+# --- 覆蓋率／profiling ---
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+lcov.info
+prof/
+*.prof
+*.pstats
+*.lprof
+*.gcda
+*.gcno
+
+# --- 原生建置產物（Rust／C）---
+target/
+crates/*/target/
+*.pyd
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.o
+*.obj
+*.exp
+*.pdb
+*.ilk
+*.exe
+.maturin/
+compile_commands.json
+.clangd/
+
+# --- 執行期輸出（音訊／影片／截圖）---
+*.wav
+*.pcm
+*.mp4
+*.mkv
+*.avi
+*.bmp
+
+# --- 日誌與臨時檔 ---
+tmp/
+scratch/
+*.tmp
+*.swp
+*.swo
+*~
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# --- 環境變數／本機設定（含密鑰，唔好上載）---
+.env
+.env.*
+*.local
+secrets.json
+credentials.json
+
+# --- 編輯器／OS ---
+.vscode/
+.idea/
+.history/
+*.code-workspace
+
+# --- 本機開發用 probe／benchmark binaries（唔上載）---
+crates/gbaemu-core/src/bin/
+
+# --- debug 資料夾（功能已搬去 breakpoints.py，唔上載）---
+debug/
+
+# --- 測試程式碼（只留喺開發樹，唔上載）---
+tests/
+crates/gbaemu-core/src/*_tests.rs

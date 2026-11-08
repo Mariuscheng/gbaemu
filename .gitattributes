@@ -1,0 +1,9 @@
+# 統一 LF；Windows checkout 都用 LF，避免 diff 整份檔案。
+* text=auto eol=lf
+
+*.png binary
+*.gif binary
+*.bmp binary
+*.ico binary
+*.woff binary
+*.woff2 binary

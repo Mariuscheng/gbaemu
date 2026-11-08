@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "gbaemu-native"
+version = "0.1.0"
+description = "PyO3 native core for gbaemu"
+requires-python = ">=3.11"
+
+[tool.maturin]
+module-name = "_native"
+manifest-path = "Cargo.toml"

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gbaemu"
+version = "0.1.0"
+description = "Clean-room GBA emulator with a Gymnasium-style RL interface"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "gbaemu contributors" }]
+license = { text = "MIT" }
+keywords = ["gba", "emulator", "reinforcement-learning", "gymnasium"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Games/Entertainment :: Emulators",
+]
+
+# 核心模擬器零外部依賴；RL 需要 numpy（gymnasium 由 check_env 選配）。
+[project.optional-dependencies]
+rl = ["numpy>=1.24", "gymnasium>=1.0"]
+dev = ["pytest>=8", "pillow"]
+ui = ["pygame-ce>=2.5"]
+
+[project.scripts]
+gbaemu = "gbaemu.cli:main"
+
+[tool.setuptools]
+# 專案根目錄 = gbaemu 套件根；package-dir 把它映射成安裝後的 gbaemu/。
+package-dir = { gbaemu = "." }
+packages = [
+    "gbaemu",
+    "gbaemu.audio",
+    "gbaemu.bus",
+    "gbaemu.cpu",
+    "gbaemu.devices",
+    "gbaemu.hle",
+    "gbaemu.memory",
+    "gbaemu.rl",
+    "gbaemu.state",
+    "gbaemu.video",
+]
+# 開發資產（tests/、rom/、docs/、legacy pygba/、gba_cpu/…）不進 wheel。
+include-package-data = false
+
+[tool.setuptools.package-data]
+gbaemu = ["_native*.pyd", "_native*.so", "_native*.dylib"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

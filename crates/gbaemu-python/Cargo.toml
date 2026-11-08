@@ -1,0 +1,15 @@
+[package]
+name = "gbaemu-python"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "PyO3 adapter for gbaemu-core (opt-in rust backend)"
+license = "MIT"
+
+[lib]
+name = "gbaemu_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+gbaemu-core = { path = "../gbaemu-core" }
+pyo3 = { version = "0.30", features = ["extension-module"] }

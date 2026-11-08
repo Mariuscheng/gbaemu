@@ -25,6 +25,12 @@ WHEEL_DIST = ROOT / "dist"
 
 
 def main() -> int:
+    # 每次都用乾淨的 build/egg-info，避免上一個 Python 版本的產物混入。
+    for stale in [ROOT / "build", *ROOT.glob("*.egg-info")]:
+        if stale.is_dir():
+            shutil.rmtree(stale)
+        elif stale.exists():
+            stale.unlink()
     if NATIVE_DIST.exists():
         shutil.rmtree(NATIVE_DIST)
     subprocess.run(
@@ -36,6 +42,8 @@ def main() -> int:
             "--release",
             "--manifest-path",
             str(ROOT / "crates" / "gbaemu-python" / "Cargo.toml"),
+            "--interpreter",
+            sys.executable,
             "-o",
             str(NATIVE_DIST),
         ],

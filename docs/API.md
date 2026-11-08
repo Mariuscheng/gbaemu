@@ -912,9 +912,15 @@ try:
     print("frames:", app.frames)
     print("title:", app.title)
     print("screen shape:", app.screen.shape)
+    print("pixels:", len(app.emu.video.read_frame()))   # 115200
 finally:
-    app.stop()
+    app.stop(save=False)   # 唔寫 .sav
 ```
+
+> `GbaApp` 係 facade，**冇** `app.video`／`app.memory`／`app.cpu`。
+> 要直接讀畫面／記憶體，用 `app.emu.video`、`app.emu.memory`，
+> 或者 `app.screen.raw`／`app.screen.ndarray`。另外 `GbaApp` 建構時
+> 唔會自動行 frame，要呼叫 `app.tick()` 先會有新畫面。
 
 建構參數：
 
@@ -925,9 +931,13 @@ finally:
 | `bios` | `None` | BIOS 路徑；檔案存在才加入 config |
 | `verify_logo` | `True` | 目前忽略（保留相容） |
 | `scale` | `4` | 視窗倍率 |
-| `sound` | `None` | 非 false 值 → `AudioMode.BUFFERED` |
+| `sound` | `None` | 非 false 值 → `AudioMode.BUFFERED`；只係開關，`"100"` 唔代表音量 |
 | `throttle` | `True` | 實時節流 |
 | `**kwargs` | — | 目前忽略 |
+
+> `window="null"` 時唔會初始化 pygame mixer，所以`sound` 冇實際聲音輸出；
+> 但 config 仍然係 `BUFFERED`，可以經 `app.emu.audio.read_buffer()` 拿 PCM。
+> 要聽到聲，用 `window="SDL3"` 並安裝 `pygame-ce`。
 
 方法：
 

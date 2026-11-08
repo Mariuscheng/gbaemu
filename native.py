@@ -343,6 +343,17 @@ class NativeEmulator:
             events=tuple(events),
         )
 
+    def game_area(
+        self, layer: int | None = None, *, include_attributes: bool = False
+    ):
+        """回傳 BG tile map（PyBoy ``game_area()`` 風格；native 版）。"""
+
+        from .video.tilemap import read_game_area
+
+        return read_game_area(
+            self, layer=layer, include_attributes=include_attributes
+        )
+
     def pause(self) -> None:
         self._paused = True
 

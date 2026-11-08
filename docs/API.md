@@ -962,6 +962,53 @@ finally:
 > 但 config 仍然係 `BUFFERED`，可以經 `app.audio.read_buffer()` 拿 PCM。
 > 要聽到聲，用 `window="SDL3"` 並安裝 `pygame-ce`。
 
+### 12.1 `game_area()`：PyBoy 風格的 tile matrix
+
+PyBoy 嘅 `pyboy.game_area()` 回傳 tile identifier 嘅 2-D array；GBA 版由
+BG layer 嘅 tile map 直接讀出：
+
+```python
+area = app.game_area()            # 自動揀第一個 enabled 嘅 BG
+print(area.shape, area.dtype)     # e.g. (32, 32) uint16
+
+area0 = app.game_area(0)          # 指定 BG0
+area2 = app.game_area(2)          # 指定 BG2
+
+# 連 palette／flip attributes 一齊拿：
+raw = app.game_area(0, include_attributes=True)
+```
+
+| 參數 | 說明 |
+|---|---|
+| `layer` | `0`–`3`；`None` 自動揀第一個 enabled 嘅 BG |
+| `include_attributes` | text BG 先有意義；`True` 回傳完整 16-bit map entry（tile 編號＋palette／hflip／vflip），`False` 只回 tile 編號（`entry & 0x3FF`） |
+
+回傳值：
+
+- `numpy.ndarray`，dtype `uint16`；
+- shape 係該 BG 嘅完整 tile map：32×32、64×32、32×64、64×64，
+  affine BG 就係 16×16 至 128×128；
+- text BG：每格 `0`–`1023`（`include_attributes=True` 時係完整 16-bit）；
+- affine BG：每格 `0`–`255`。
+
+```python
+import numpy as np
+
+area = app.game_area()
+print("unique tiles:", len(np.unique(area)))
+print("player area:", area[8:12, 10:20])
+```
+
+注意：
+
+- 呢個係 **BG tile map**，唔包含 sprites；PyBoy 嘅 `game_area()` 會將
+  on-screen sprites overlay 上 tile matrix，GBA 版暫時只讀 BG。
+- bitmap mode（3／4／5）冇 tile map，會 raise `ValueError`；呢個情況用
+  `app.screen.ndarray`。
+- 如果所有 BG 都未開啟，`app.game_area()` 會 raise `ValueError`；
+  可以等遊戲入到地圖畫面再 call，或者明確傳 `layer`。
+- map 係完整 map（包括 scroll 出去嘅部分），唔係只剪 30×20 可見範圍。
+
 方法：
 
 ```python
@@ -975,6 +1022,9 @@ app.button_release("start")
 
 app.save_state("slot1.state")         # 寫檔案
 app.load_state("slot1.state")
+
+app.game_area()                       # BG tile map（見 §12.1）
+app.game_area(layer=0, include_attributes=True)
 
 print(app.emu)                        # 底層 Emulator／NativeEmulator
 print(app.frame_count)                 # app.frames 的 alias
@@ -1115,6 +1165,9 @@ except SnapshotConfigMismatchError:
    headless。`verify_logo` 同 `**kwargs` 目前接受但忽略。
 9. **公開 repo**：唔包含 ROM、BIOS、`.sav`、tests 同 debug evidence；呢啲
    要自行準備，詳見 [`README.md`](../README.md) 同 [`rom/README.md`](../rom/README.md)。
+10. **`game_area()`**：只讀 BG tile map，唔包含 sprites；bitmap mode 同
+    冇 enabled BG 嘅畫面會 raise `ValueError`。PyBoy 嘅 `game_area()` 會
+    overlay sprites，所以兩者數值唔可以直接比較。
 
 ---
 

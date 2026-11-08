@@ -376,6 +376,21 @@ class Emulator:
             events=tuple(collected),
         )
 
+    def game_area(
+        self, layer: int | None = None, *, include_attributes: bool = False
+    ):
+        """回傳 BG tile map（PyBoy ``game_area()`` 風格）。
+
+        ``layer=None`` 會揀第一個 enabled 嘅 BG；回傳 numpy ``uint16`` array，
+        shape 係該 BG 嘅 tile map 大小（通常 32x32）。
+        """
+
+        from .video.tilemap import read_game_area
+
+        return read_game_area(
+            self, layer=layer, include_attributes=include_attributes
+        )
+
     def pause(self) -> None:
         self._paused = True
 

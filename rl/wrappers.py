@@ -170,6 +170,15 @@ class GbaApp:
             raise AttributeError("NativeEmulator 不提供 events；請用 Python backend")
         return events
 
+    def game_area(
+        self, layer: int | None = None, *, include_attributes: bool = False
+    ):
+        """PyBoy 風格 BG tile map；見 :func:`gbaemu.video.tilemap.read_game_area`。"""
+
+        return self._emu.game_area(
+            layer=layer, include_attributes=include_attributes
+        )
+
     # -- backend 選擇 ----------------------------------------------------
     def _make_backend(self, path, config):
         """GUI 預設用 Rust core；沒有 extension 或指定 python 才退回 reference。"""

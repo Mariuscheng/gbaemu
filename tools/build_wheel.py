@@ -69,12 +69,22 @@ def main() -> int:
     env = os.environ.copy()
     env["GBAEMU_NATIVE_WHEEL"] = "1"
     subprocess.run(
-        [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "-w", str(WHEEL_DIST)],
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "wheel",
+            ".",
+            "--no-deps",
+            "--no-cache-dir",
+            "-w",
+            str(WHEEL_DIST),
+        ],
         cwd=ROOT,
         env=env,
         check=True,
     )
-    wheel = sorted(WHEEL_DIST.glob("gbaemu-*.whl"))[-1]
+    wheel = max(WHEEL_DIST.glob("gbaemu-*.whl"), key=lambda path: path.stat().st_mtime)
     print(f"wheel: {wheel}")
     return 0
 

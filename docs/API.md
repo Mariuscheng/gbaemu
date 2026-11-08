@@ -3,6 +3,12 @@
 本文件係 `gbaemu` **0.1.0** 嘅 Python API reference，寫法盡量貼近 PyBoy 嘅
 API 文件：每個公開類別／方法都有簽名、行為契約同可貼上執行嘅範例。
 
+> **統一入口係 `GbaApp`。** 一般應用（開遊戲、`tick()`、`screen`、
+> `game_area()`、存檔）請由 [§12](#12-統一入口gbaappscreen) 開始。
+> `Emulator` 係低層 backend／工具 API，通常唔需要直接 instantiate；
+> 需要 `step_cycles()`、`events` 或自訂 `EmulatorConfig` 時，先用
+> `app.emu`，或者睇 [§5](#5-低層-backendemulator)。
+
 > 設計權威仍然係 [`docs/spec/SPEC.md`](spec/SPEC.md)（尤其 §5、§6、§7）。
 > 本文件描述**目前實作**；如果實作同 SPEC 有出入，以程式碼為準，並應同步
 > 更新 SPEC／`TODO.md`。未完成項目見 [`TODO.md`](../TODO.md)。
@@ -15,14 +21,14 @@ API 文件：每個公開類別／方法都有簽名、行為契約同可貼上�
 2. [五分鐘快速開始](#2-五分鐘快速開始)
 3. [公開匯出總表](#3-公開匯出總表)
 4. [`EmulatorConfig`](#4-emulatorconfig)
-5. [`Emulator`](#5-emulator)
+5. [低層 backend：`Emulator`](#5-低層-backendemulator)
 6. [觀測 API：CPU／Memory／Video／Audio](#6-觀測-apicpumemoryvideoaudio)
 7. [輸入：`InputPort`](#7-輸入inputport)
 8. [事件：`EmulatorEvent`／`EventStream`](#8-事件emulatoreventeventstream)
 9. [Snapshot：`save_state()`／`load_state()`](#9-snapshotsave_stateload_state)
 10. [Rust native backend](#10-rust-native-backend)
 11. [RL 層：`GBAEnv` 與 rollout](#11-rl-層gbaenv-與-rollout)
-12. [GUI facade：`GbaApp`／`Screen`](#12-gui-facadegbaappscreen)
+12. [統一入口：`GbaApp`／`Screen`](#12-統一入口gbaappscreen)
 13. [CLI](#13-cli)
 14. [錯誤類別](#14-錯誤類別)
 15. [已知限制與 backend 差異](#15-已知限制與-backend-差異)
@@ -39,14 +45,14 @@ API 文件：每個公開類別／方法都有簽名、行為契約同可貼上�
 | Gymnasium `check_env()`／spaces | `gymnasium` | `pip install "gbaemu[rl]"` |
 | SDL 視窗、音訊輸出 | `pygame-ce` | `pip install "gbaemu[ui]"` |
 
-`gbaemu` 有兩個 backend，API 大致相同：
+`gbaemu` 有兩個**核心** backend（同 PyBoy 嘅 window backend 係兩個概念）：
 
-| Backend | 類別 | 特性 |
+| 核心 backend | 類別 | 特性 |
 |---|---|---|
-| Python reference | `gbaemu.Emulator` | 預設、可讀性優先、行為最完整（events、精確 cycle） |
+| Python reference | `gbaemu.Emulator` | 可讀性優先、行為最完整（events、精確 cycle） |
 | Rust native | `gbaemu.NativeEmulator` | 快得多；經 PyO3 `gbaemu._native`，需 native wheel 或自行 build |
 
-選擇方式（環境變數 `GBAEMU_BACKEND`）：
+`GbaApp` 係統一入口，會按下面規則揀 core；實際 backend 喺 `app.emu`：
 
 | 值 | `Emulator.from_rom()` | `open_emulator()` | `GbaApp()` |
 |---|---|---|---|
@@ -59,49 +65,48 @@ API 文件：每個公開類別／方法都有簽名、行為契約同可貼上�
 import os
 
 os.environ["GBAEMU_BACKEND"] = "rust"   # 想用 Rust core
-from gbaemu import Emulator              # from_rom() 會回傳 NativeEmulator
+from gbaemu import GbaApp
 
-emu = Emulator.from_rom("rom/game.gba")
-print(type(emu).__name__)                # NativeEmulator
+app = GbaApp("rom/game.gba", window="null")
+try:
+    print(type(app.emu).__name__)       # NativeEmulator
+finally:
+    app.stop(save=False)
 ```
 
 想明確揀 backend，建議直接用 `gbaemu.native.open_emulator()`，或者直接
 instantiating `NativeEmulator`（見 [§10](#10-rust-native-backend)）。
+`GbaApp(window="SDL3")` 嘅 window 係另一個 backend 概念，見
+[§12](#12-統一入口gbaappscreen)。
 
 ---
 
 ## 2. 五分鐘快速開始
 
 ```python
-from gbaemu import Emulator, EmulatorConfig, VideoMode
+from gbaemu import GbaApp
 
-config = EmulatorConfig(
-    video=VideoMode.FRAMEBUFFER,   # 需要 framebuffer 才 render
-)
-
-emu = Emulator.from_rom("rom/game.gba", config=config)
+app = GbaApp("rom/game.gba", window="null")
 try:
-    emu.reset()
+    app.tick()                              # 行一個 frame
 
-    # 按住 A 一個 frame
-    emu.input.set_buttons(a=True)
-    result = emu.step_frame(render=True)
-    emu.input.clear()
+    print("frame:", app.frame_count)
+    print("PC:", hex(app.cpu.state().regs[15]))
 
-    print("frame:", result.frame_index)
-    print("cycles:", result.cycles)
-    print("PC:", hex(emu.cpu.state().regs[15]))
-
-    pixels = emu.video.read_frame()      # 240*160*3 bytes (RGB888)
+    pixels = app.video.read_frame()         # 240*160*3 bytes (RGB888)
     assert len(pixels) == 240 * 160 * 3
 
-    for event in emu.events.poll():
-        print(event.kind, event.cycle)
+    rgba = app.screen.ndarray               # (160, 240, 4) uint8
+    print(rgba.shape)
 finally:
-    emu.close()
+    app.stop(save=False)                    # 唔寫 .sav
 ```
 
-`emu.close()` 之後任何操作都會 raise `GbaEmuError`；`close()` 可以重複呼叫。
+`app.stop()` 之後任何操作都會 raise `GbaEmuError`；`stop()` 可以重複呼叫。
+
+需要 `step_cycles()`、`events`、自訂 timing／video config 時，仍然用
+`GbaApp`，只係低層操作經 `app.emu`（見 [§5](#5-低層-backendemulator)）；唔使
+另外 instantiate `Emulator`。
 
 ---
 
@@ -116,11 +121,11 @@ print(gbaemu.__version__)   # "0.1.0"
 
 | 名稱 | 類型 | 說明 |
 |---|---|---|
-| `Emulator` | class | Python reference 模擬器 |
-| `NativeEmulator` | class | Rust core facade |
+| `GbaApp` | class | **建議統一入口**：PyBoy 風格 app／headless；`app.emu` 係 backend |
+| `Emulator` | class | 低層 Python reference backend（通常經 `app.emu` 使用） |
+| `NativeEmulator` | class | 低層 Rust core facade |
 | `open_emulator` | function | 依 `GBAEMU_BACKEND` 建立 backend |
-| `GbaApp` | class | PyBoy 風格 GUI／headless facade |
-| `EmulatorConfig` | dataclass | 模擬器設定 |
+| `EmulatorConfig` | dataclass | 模擬器設定；可傳給 `GbaApp(config=...)` |
 | `TimingMode` / `VideoMode` / `AudioMode` / `BootMode` / `SaveType` | Enum | 設定列舉 |
 | `Button` | Enum | 十個 GBA 按鍵 |
 | `EventKind` | Enum | 對外事件種類 |
@@ -203,7 +208,10 @@ config = EmulatorConfig(
 
 ---
 
-## 5. `Emulator`
+## 5. 低層 backend：`Emulator`
+
+> 一般 application code 唔需要直接建立 `Emulator`；請用 `GbaApp`（§12）。
+> 本節係低層契約，主要俾 `app.emu`、工具、測試同 Rust/Python 對照使用。
 
 ```python
 class Emulator:
@@ -331,20 +339,22 @@ emu.cartridge_flush_to_disk()    # 原子寫回 <rom stem>.sav
 
 ## 6. 觀測 API：CPU／Memory／Video／Audio
 
-所有 `read_*` 都係 debugger peek：**唔會**觸發硬體副作用、唔會消耗 cycle、
-唔會改 open bus。寫入 API 見 `MemoryView`。
+以下用 `app`（`GbaApp`）示範；`app.cpu`／`app.memory`／`app.video`／
+`app.audio` 就係 `app.emu` 對應 view 嘅 shortcut。所有 `read_*` 都係
+debugger peek：**唔會**觸發硬體副作用、唔會消耗 cycle、唔會改 open bus。
+寫入 API 見 `MemoryView`。
 
 ### 6.1 `CPUView`
 
 ```python
-state = emu.cpu.state()
+state = app.cpu.state()
 print(state.regs[15])        # PC
 print(state.thumb, hex(state.cpsr), state.mode, state.halted)
 
-print(emu.cpu.read_register("r0"))
-print(emu.cpu.read_register("r15"))
-print(emu.cpu.read_register("cpsr"))
-print(emu.cpu.read_register("spsr"))
+print(app.cpu.read_register("r0"))
+print(app.cpu.read_register("r15"))
+print(app.cpu.read_register("cpsr"))
+print(app.cpu.read_register("spsr"))
 ```
 
 `read_register(name)` 只接受 `"r0"`…`"r15"`、`"cpsr"`、`"spsr"`；其他
@@ -365,21 +375,21 @@ print(emu.cpu.read_register("spsr"))
 Breakpoint：
 
 ```python
-pc = emu.cpu.state().regs[15]                    # 目前 PC（ARM 位址）
-bp = emu.cpu.set_breakpoint(pc)
+pc = app.cpu.state().regs[15]                    # 目前 PC（ARM 位址）
+bp = app.cpu.set_breakpoint(pc)
 
-result = emu.step_cycles(100_000)
+result = app.step_cycles(100_000)
 if result.breakpoint_hit == bp:
-    print("hit at", hex(emu.cpu.state().regs[15]))
+    print("hit at", hex(app.cpu.state().regs[15]))
 
-emu.cpu.clear_breakpoint(bp)
+app.cpu.clear_breakpoint(bp)
 ```
 
 Thumb 狀態可以明確指定（`address` 仍然係指令位址，唔使加 1）：
 
 ```python
-bp_thumb = emu.cpu.set_breakpoint(pc, thumb=True)  # 只喺 Thumb 狀態命中
-emu.cpu.clear_breakpoint(bp_thumb)
+bp_thumb = app.cpu.set_breakpoint(pc, thumb=True)  # 只喺 Thumb 狀態命中
+app.cpu.clear_breakpoint(bp_thumb)
 ```
 
 每次 `set_breakpoint()` 都會配置新 id；`clear_breakpoint()` 只清除指定 id，
@@ -388,21 +398,21 @@ id 唔存在會 raise `BreakpointError`。
 ### 6.2 `MemoryView`
 
 ```python
-value = emu.memory.read_u8(0x02000000)
-value16 = emu.memory.read_u16(0x02000000)
-value32 = emu.memory.read_u32(0x02000000)
-block = emu.memory.read(0x02000000, 256)        # bytes
+value = app.memory.read_u8(0x02000000)
+value16 = app.memory.read_u16(0x02000000)
+value32 = app.memory.read_u32(0x02000000)
+block = app.memory.read(0x02000000, 256)        # bytes
 
-emu.memory.write_u8(0x02000000, 0x12)
-emu.memory.write_u16(0x02000000, 0x1234)
-emu.memory.write_u32(0x02000000, 0x12345678)
+app.memory.write_u8(0x02000000, 0x12)
+app.memory.write_u16(0x02000000, 0x1234)
+app.memory.write_u32(0x02000000, 0x12345678)
 
 from gbaemu import MemoryRegionKind
 
-info = emu.memory.region_info(MemoryRegionKind.EWRAM)
+info = app.memory.region_info(MemoryRegionKind.EWRAM)
 print(info.kind, hex(info.base), info.size, info.read_only)
 
-ewram = emu.memory.read_region(MemoryRegionKind.EWRAM)   # bytes 複本
+ewram = app.memory.read_region(MemoryRegionKind.EWRAM)   # bytes 複本
 ```
 
 | 方法 | 說明 |
@@ -425,12 +435,12 @@ ewram = emu.memory.read_region(MemoryRegionKind.EWRAM)   # bytes 複本
 ### 6.3 `VideoView`
 
 ```python
-frame = emu.video.read_frame()          # bytes, 240*160*3, RGB888
-line0 = emu.video.read_scanline(0)      # bytes, 240*3
-print(emu.video.width, emu.video.height, len(frame))
+frame = app.video.read_frame()          # bytes, 240*160*3, RGB888
+line0 = app.video.read_scanline(0)      # bytes, 240*3
+print(app.video.width, app.video.height, len(frame))
 
 # 需要 numpy
-array = emu.video.read_frame_array()    # shape (160, 240, 3), dtype uint8
+array = app.video.read_frame_array()    # shape (160, 240, 3), dtype uint8
 ```
 
 - Pixel 格式：RGB888、row-major、scanline 0 喺最前。
@@ -439,36 +449,47 @@ array = emu.video.read_frame_array()    # shape (160, 240, 3), dtype uint8
 - `read_scanline(line)` 接受 `0..159`，否則 `ValueError`。
 - `video=VideoMode.OFF` 時 framebuffer **唔會更新**，`read_frame()` 會回傳
   最後一次 render 嘅內容（或者全零）；RL 唔應該依賴 OFF mode 嘅畫面。
+- `app.video.read_frame()` 回傳 `bytes`；要 numpy array 用
+  `app.video.read_frame_array()`（RGB）或者 `app.screen.ndarray`（RGBA）。
+- 讀之前一定要 `app.tick(render=True)`；`tick(render=False)` 只會推進
+  模擬，唔會更新 framebuffer，所以讀到嘅會係上一次 render 嘅內容。
 
 ```python
-from gbaemu import Emulator, EmulatorConfig, VideoMode
+from gbaemu import GbaApp, EmulatorConfig, VideoMode
 
-emu = Emulator.from_rom(
+app = GbaApp(
     "rom/game.gba",
+    window="null",
     config=EmulatorConfig(video=VideoMode.FRAMEBUFFER),
 )
-emu.run_frames(2, render=True)          # 要 render=True 才有新畫面
-raw = emu.video.read_frame()
+try:
+    app.tick(render=True)               # 要 render=True 才有新畫面
+    raw = app.video.read_frame()
 
-# 自己存成 PPM（唔需要 Pillow）
-with open("frame.ppm", "wb") as handle:
-    handle.write(b"P6\n240 160\n255\n")
-    handle.write(raw)
-emu.close()
+    # 自己存成 PPM（唔需要 Pillow）
+    with open("frame.ppm", "wb") as handle:
+        handle.write(b"P6\n240 160\n255\n")
+        handle.write(raw)
+finally:
+    app.stop(save=False)
 ```
 
 ### 6.4 `AudioView`
 
 ```python
-from gbaemu import AudioMode, Emulator, EmulatorConfig
+from gbaemu import GbaApp
 
-emu = Emulator.from_rom(
+app = GbaApp(
     "rom/game.gba",
-    config=EmulatorConfig(audio=AudioMode.BUFFERED),
+    window="null",
+    sound="100",                       # 或者 config=EmulatorConfig(audio=BUFFERED)
 )
-emu.run_frames(1, render=False)
-pcm = emu.audio.read_buffer()      # signed 16-bit little-endian stereo
-print(emu.audio.sample_rate, len(pcm))
+try:
+    app.tick(render=False)
+    pcm = app.audio.read_buffer()      # signed 16-bit little-endian stereo
+    print(app.audio.sample_rate, len(pcm))
+finally:
+    app.stop(save=False)
 ```
 
 - `sample_rate`：GBA 預設 32768 Hz。
@@ -483,15 +504,15 @@ print(emu.audio.sample_rate, len(pcm))
 ```python
 from gbaemu import Button
 
-emu.input.set_buttons(a=True, start=False)   # 只改有提及嘅按鍵
-emu.input.press(Button.RIGHT, Button.A)
-emu.input.release(Button.A)
+app.input.set_buttons(a=True, start=False)   # 只改有提及嘅按鍵
+app.input.press(Button.RIGHT, Button.A)
+app.input.release(Button.A)
 
-print(emu.input.is_pressed(Button.RIGHT))
-print(emu.input.pressed_buttons)             # frozenset[Button]
-print(hex(emu.input.keyinput_mask))          # active-low 10-bit
+print(app.input.is_pressed(Button.RIGHT))
+print(app.input.pressed_buttons)             # frozenset[Button]
+print(hex(app.input.keyinput_mask))          # active-low 10-bit
 
-emu.input.clear()
+app.input.clear()
 ```
 
 `set_buttons(**buttons)`：
@@ -509,12 +530,12 @@ emu.input.clear()
 
 ## 8. 事件：`EmulatorEvent`／`EventStream`
 
-Python backend 嘅 `emu.events` 會收集對外事件：
+Python backend 嘅 `app.events` 會收集對外事件：
 
 ```python
-emu.step_frame()
+app.tick()
 
-for event in emu.events.poll():
+for event in app.events.poll():
     print(
         event.kind.value,
         event.cycle,
@@ -523,6 +544,9 @@ for event in emu.events.poll():
         event.address,
     )
 ```
+
+> Rust backend 冇完整 event stream；要用 `app.events` 就設定
+> `GBAEMU_BACKEND=python`（見 [§10](#10-rust-native-backend)）。
 
 `poll()` 回傳自上次 poll 以嚟嘅 `tuple[EmulatorEvent, ...]`，依 `cycle`
 非遞減排序，並清空已回報事件。`EventStream` 亦有 `clear()`、`len()`。
@@ -562,28 +586,36 @@ for event in emu.events.poll():
 
 ## 9. Snapshot：`save_state()`／`load_state()`
 
+`GbaApp` 嘅 `save_state()` 唔使傳 path 就回傳 bytes；傳 path 就順便寫檔。
+
 ```python
-blob = emu.save_state()
+blob = app.save_state()
 print(len(blob), blob[:4])          # b"GEMU"
 
-# 之後（同一個 config、同一個 emulator 或新 instance）
-emu.load_state(blob)
+# 之後（同一個 config；同一個 app 或新 app）
+app.load_state(blob)
 ```
 
 ```python
-from gbaemu import Emulator, EmulatorConfig
+from gbaemu import GbaApp, EmulatorConfig
 
 config = EmulatorConfig(hle_strict=False)
-emu = Emulator.from_rom("rom/game.gba", config=config)
+app = GbaApp("rom/game.gba", window="null", config=config)
 try:
-    blob = emu.save_state()
+    blob = app.save_state()
 finally:
-    emu.close()
+    app.stop(save=False)
 
 # 新 process／新 instance：config 必須一致
-emu2 = Emulator.from_rom("rom/game.gba", config=config)
-emu2.load_state(blob)
+app2 = GbaApp("rom/game.gba", window="null", config=config)
+try:
+    app2.load_state(blob)
+finally:
+    app2.stop(save=False)
 ```
+
+> 低層 `Emulator.save_state()` 同 `app.emu.save_state()` 亦一樣回傳 bytes；
+> `GbaApp` 只係多咗「有 path 就寫檔」嘅方便層。
 
 格式（SPEC §5.7，全部小端序）：
 
@@ -607,7 +639,8 @@ payload 由九段組成：`CPU\0`、`BUS\0`、`PPU\0`、`DMA\0`、`TMR\0`、`IRQ
 重要契約：
 
 - `load_state()` 還原嘅 save RAM **只存在於記憶體**，唔會自動寫 `.sav`；
-  要寫盤請另外呼叫 `emu.cartridge_flush_to_disk()`。
+  要寫盤請另外呼叫 `app.save_battery()`（或
+  `app.emu.cartridge_flush_to_disk()`）。
 - Snapshot 目前只保證**同一個 backend**產生／載入。Python 同 Rust 嘅
   cartridge save-kind 編碼未完全一致，跨 backend 載入可能 raise
   `SnapshotConfigMismatchError` 或 `UnsupportedSaveTypeError`。
@@ -617,12 +650,12 @@ payload 由九段組成：`CPU\0`、`BUS\0`、`PPU\0`、`DMA\0`、`TMR\0`、`IRQ
 如果想做 branching／MCTS：
 
 ```python
-root = emu.save_state()
+root = app.save_state()
 for action in range(4):
-    emu.load_state(root)
-    emu.input.set_buttons(**{("a", "b", "right", "left")[action]: True})
-    emu.run_frames(4)
-    score = emu.memory.read_u32(0x02000000)
+    app.load_state(root)
+    app.input.set_buttons(**{("a", "b", "right", "left")[action]: True})
+    app.emu.run_frames(4)
+    score = app.memory.read_u32(0x02000000)
     print(action, score)
 ```
 
@@ -878,7 +911,11 @@ numpy array（用 `.tobytes()`）同其他物件（fallback `repr()`）。
 
 ---
 
-## 12. GUI facade：`GbaApp`／`Screen`
+## 12. 統一入口：`GbaApp`／`Screen`
+
+> **建議所有 application code 由呢度開始。** `GbaApp` 包住
+> `Emulator`／`NativeEmulator`；要低層功能就用 `app.emu`，唔好另外
+> instantiate `Emulator`。
 
 `GbaApp` 係 GBA 版嘅 PyBoy 入口：`GbaApp(rom)` 之後用 `app.tick()` 推進，
 `app.screen.ndarray` 拿 RGBA 畫面。內部默認用 Rust native（`auto`），冇

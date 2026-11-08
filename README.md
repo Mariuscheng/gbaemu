@@ -16,7 +16,7 @@ PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gba
 | Phase 0–2 | 套件骨架、ROM header、HLE boot、ARM7TDMI ARM/THUMB、bus／例外、PPU、Mode 3/4/5、frame boundary | ✅ |
 | Phase 3 | DMA（含 DMA Sound FIFO／repeat 語意）、timers、IRQ／Halt／IntrWait、SWI、save media、snapshot | ✅ |
 | Phase 4 | 音訊 PSG 4 聲道＋DMA Sound（FIFO repeat 語意）、Mode 0/1/2＋sprites／WIN0／WIN1／OBJ window／mosaic／blending、video contention | ✅ |
-| Phase 5 | `GBAEnv`、`GbaApp` facade、frame skip、snapshot branching、Gymnasium `check_env`、multi-process rollout／trace replay（`rl/rollout.py`） | ✅ |
+| Phase 5 | `GBAEnv`、`GbaApp` 統一入口、frame skip、snapshot branching、Gymnasium `check_env`、multi-process rollout／trace replay（`rl/rollout.py`） | ✅ |
 | Rust core | `crates/gbaemu-core`（CPU／bus／PPU／DMA／timer／IRQ／audio／save media）＋PyO3 `gbaemu._native`；GUI 預設後端 | ✅ |
 | GUI | pygame-ce SDL 視窗（4×）、32.768 kHz mixer、鍵盤輸入、`.sav`（ROM stem 命名）自動載入／原子寫回 | ✅ |
 
@@ -57,7 +57,7 @@ ROM（外部 `test-rom/`）Memory 1552/1552、DMA 1256/1256、BIOS math 615/615 
   audio/             # PSG＋DMA Sound（FIFO A/B、PCM）
   devices/           # DMA、timers、keypad
   hle/               # post-boot、SWI table／實作、BIOS 讀取保護
-  rl/                # env.py（GBAEnv）、rollout.py（multi-process／trace replay）、spaces.py、wrappers.py
+  rl/                # env.py（GBAEnv）、rollout.py（multi-process／trace replay）、wrappers.py（GbaApp）
   state/             # snapshot header／payload
   breakpoints.py     # breakpoint 表（公開 API）
   crates/            # Rust workspace：gbaemu-core、gbaemu-python（PyO3）
@@ -157,7 +157,8 @@ python main.py
 `main.py` 本身唔會寫死任何 ROM 路徑；複製去其他資料夾之前，先
 `pip install gbaemu`（或將 repo 加入 `PYTHONPATH`）。
 
-`main.py` 使用 PyBoy 風格 API：
+`main.py` 使用 PyBoy 風格 API；`GbaApp` 係統一入口，低層 `Emulator`／
+`NativeEmulator` 只會經 `app.emu` 使用：
 
 ```python
 from gbaemu import GbaApp

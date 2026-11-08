@@ -3,7 +3,8 @@
 GBA 模擬器：Python 參考實作 + Rust 原生核心（production backend），附
 PyBoy 風格 GUI 與 Gymnasium 風格 RL 介面。專案根目錄**就是** `gbaemu`
 套件根（沒有內層 `gbaemu/`）；權威設計文件是
-[`docs/spec/SPEC.md`](docs/spec/SPEC.md)。
+[`docs/spec/SPEC.md`](docs/spec/SPEC.md)，Python API 參考（含可執行範例）
+見 [`docs/API.md`](docs/API.md)。
 
 > 本 repo **不包含**任何 GBA ROM 或 Nintendo BIOS。請自行準備你合法擁有的
 > 檔案，見 [`rom/README.md`](rom/README.md)。

@@ -1,0 +1,74 @@
+name: Build and publish wheels
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  # 純 Python wheel：任何 Python 3.11+ 都裝到，冇 native 時自動 fallback。
+  pure:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build pure wheel
+        run: |
+          python -m pip install --upgrade pip wheel
+          if (Test-Path build) { Remove-Item -Recurse -Force build }
+          python -m pip wheel . --no-deps -w dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-pure
+          path: dist/*.whl
+
+  # Native wheel：每個 Python 版本各自 build（Windows x64）。
+  native:
+    runs-on: windows-latest
+    # actions/setup-python 對 free-threaded（3.14t）支援視版本而定；如果
+    # runner 未有 3.14t，呢個 matrix entry 失敗都唔會阻止其他 wheel 發佈。
+    continue-on-error: ${{ matrix.python == '3.14t' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native wheel
+        run: |
+          python -m pip install --upgrade pip wheel maturin
+          python tools/build_wheel.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.python }}
+          path: dist/*.whl
+
+  # 上 PyPI（Trusted Publishing）。請先喺 PyPI 設定 trusted publisher：
+  # owner/repo/workflow = 此 repo / wheels.yml / environment = pypi
+  publish:
+    needs: [pure, native]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+      - name: Show wheels
+        run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

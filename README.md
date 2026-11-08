@@ -134,6 +134,11 @@ GitHub Actions matrix），再將所有 wheel 一齊上 PyPI：pip 會自動揀 
 > 唔同 ABI，必須分開 build；亦可以用 PyO3 `abi3-py311` 出一個
 > `cp311-abi3` wheel 覆蓋 3.11–3.14（GIL），再加一個 `cp314t`。
 
+GitHub Actions（[`.github/workflows/wheels.yml`](.github/workflows/wheels.yml)）
+會喺 tag `v*` 時自動 build「純 Python + 3.11–3.14 + 3.14t」wheels 並上 PyPI；
+PyPI 端要先設定 Trusted Publisher（owner/repo/workflow `wheels.yml`、
+environment `pypi`）。
+
 ## 快速開始
 
 ```powershell

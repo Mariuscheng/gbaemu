@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -57,9 +58,12 @@ def main() -> int:
         print(f"native extension: {target.name}")
 
     WHEEL_DIST.mkdir(exist_ok=True)
+    env = os.environ.copy()
+    env["GBAEMU_NATIVE_WHEEL"] = "1"
     subprocess.run(
         [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "-w", str(WHEEL_DIST)],
         cwd=ROOT,
+        env=env,
         check=True,
     )
     wheel = sorted(WHEEL_DIST.glob("gbaemu-*.whl"))[-1]

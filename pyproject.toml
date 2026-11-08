@@ -14,6 +14,10 @@ keywords = ["gba", "emulator", "reinforcement-learning", "gymnasium"]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Topic :: Games/Entertainment :: Emulators",
 ]
@@ -44,9 +48,6 @@ packages = [
 ]
 # 開發資產（tests/、rom/、docs/、legacy pygba/、gba_cpu/…）不進 wheel。
 include-package-data = false
-
-[tool.setuptools.package-data]
-gbaemu = ["_native*.pyd", "_native*.so", "_native*.dylib"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

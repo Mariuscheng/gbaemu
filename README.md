@@ -105,6 +105,35 @@ GUI 預設用 Rust `NativeEmulator`，比 Python reference 快幾十倍。build 
 `$env:GBAEMU_BACKEND="python"` 強制。詳見
 [`docs/architecture/NATIVE_CORE.md`](docs/architecture/NATIVE_CORE.md)。
 
+### 建置 wheel（維護者）
+
+**純 Python wheel（預設、任何 Python 3.11+ 可用）**
+
+```powershell
+# 一定要先清 build/，否則舊 build/lib 可能夾帶 _native.pyd
+Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+python -m pip wheel . --no-deps -w dist_pure
+# -> dist_pure/gbaemu-0.1.0-py3-none-any.whl（冇 native，自動 fallback）
+```
+
+**Native wheel（每個 Python 版本一個）**
+
+```powershell
+python -m pip install maturin
+python tools\build_wheel.py
+# -> dist/gbaemu-0.1.0-cp3XX-cp3XXt-win_amd64.whl
+```
+
+`tools/build_wheel.py` 會用目前 interpreter build native extension，並設定
+`GBAEMU_NATIVE_WHEEL=1` 令 setuptools 將 `_native.pyd` 包入 wheel 同加上
+platform tag。要支援多個 Python 版本，就喺每個版本嘅環境各跑一次（或用
+GitHub Actions matrix），再將所有 wheel 一齊上 PyPI：pip 會自動揀 compatible
+嘅 native wheel，其餘用戶裝純 Python wheel。
+
+> Free-threaded Python（`cp314t`）同正常 GIL build（`cp311`–`cp314`）係
+> 唔同 ABI，必須分開 build；亦可以用 PyO3 `abi3-py311` 出一個
+> `cp311-abi3` wheel 覆蓋 3.11–3.14（GIL），再加一個 `cp314t`。
+
 ## 快速開始
 
 ```powershell

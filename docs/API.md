@@ -880,8 +880,23 @@ numpy array（用 `.tobytes()`）同其他物件（fallback `repr()`）。
 
 ## 12. GUI facade：`GbaApp`／`Screen`
 
-`GbaApp` 係 PyBoy 風格入口，內部默認用 Rust native（`auto`），冇 native
-就 fallback Python。需要 SDL 視窗時要裝 `pygame-ce`。
+`GbaApp` 係 GBA 版嘅 PyBoy 入口：`GbaApp(rom)` 之後用 `app.tick()` 推進，
+`app.screen.ndarray` 拿 RGBA 畫面。內部默認用 Rust native（`auto`），冇
+native 就 fallback Python。需要 SDL 視窗時要裝 `pygame-ce`。
+
+```python
+# PyBoy:  pyboy = PyBoy("game_rom.gb")
+#         pyboy.screen.ndarray.shape  # (144, 160, 4)
+from gbaemu import GbaApp
+
+app = GbaApp("rom/game.gba")       # window 預設 "null"（headless）
+try:
+    app.tick()                     # 行一個 frame
+    print(app.screen.shape)        # (160, 240, 4)
+    print(app.screen.ndarray.shape)  # (160, 240, 4)，uint8 RGBA
+finally:
+    app.stop(save=False)
+```
 
 ```python
 from gbaemu import GbaApp
@@ -911,16 +926,24 @@ try:
         app.tick(count=1, render=False, sound=False)
     print("frames:", app.frames)
     print("title:", app.title)
-    print("screen shape:", app.screen.shape)
-    print("pixels:", len(app.emu.video.read_frame()))   # 115200
+    print("screen shape:", app.screen.shape)          # (160, 240, 4)
+    print("rgba:", app.screen.ndarray.shape)          # (160, 240, 4)
+    print("rgba:", app.screen.ndarray.dtype)          # uint8
+    print("rgb:", app.screen.rgb.shape)               # (160, 240, 3)
+    print("pixels:", len(app.video.read_frame()))     # 115200 RGB888
 finally:
     app.stop(save=False)   # 唔寫 .sav
 ```
 
-> `GbaApp` 係 facade，**冇** `app.video`／`app.memory`／`app.cpu`。
-> 要直接讀畫面／記憶體，用 `app.emu.video`、`app.emu.memory`，
-> 或者 `app.screen.raw`／`app.screen.ndarray`。另外 `GbaApp` 建構時
-> 唔會自動行 frame，要呼叫 `app.tick()` 先會有新畫面。
+> `GbaApp` 係單一入口，但低層 view 全部有 forwarding：
+> `app.video`、`app.memory`、`app.cpu`、`app.input`、`app.audio` 等於
+> `app.emu.video`、`app.emu.memory`…；`app.events` 只有 Python backend 有。
+> `app.screen` 係 PyBoy 風格畫面 view：`ndarray` 係 RGBA、`rgb` 係 RGB、
+> `raw` 係 RGB888 bytes。
+>
+> 另外 `GbaApp` 建構時唔會自動行 frame，要呼叫 `app.tick()` 先會有新畫面；
+> `app.tick(render=True)` 先會更新 framebuffer，tick 之前 RGB 係全零
+> （alpha 仍然係 255）。
 
 建構參數：
 
@@ -936,7 +959,7 @@ finally:
 | `**kwargs` | — | 目前忽略 |
 
 > `window="null"` 時唔會初始化 pygame mixer，所以`sound` 冇實際聲音輸出；
-> 但 config 仍然係 `BUFFERED`，可以經 `app.emu.audio.read_buffer()` 拿 PCM。
+> 但 config 仍然係 `BUFFERED`，可以經 `app.audio.read_buffer()` 拿 PCM。
 > 要聽到聲，用 `window="SDL3"` 並安裝 `pygame-ce`。
 
 方法：
@@ -954,9 +977,13 @@ app.save_state("slot1.state")         # 寫檔案
 app.load_state("slot1.state")
 
 print(app.emu)                        # 底層 Emulator／NativeEmulator
-print(app.screen.raw)                 # bytes
-print(app.screen.ndarray)             # numpy (160,240,3)
-print(app.screen.shape)               # (160, 240, 3)
+print(app.frame_count)                 # app.frames 的 alias
+print(app.video.read_frame())          # 等於 app.emu.video.read_frame()
+print(app.memory.read_u8(0x02000000))  # 等於 app.emu.memory.read_u8(...)
+print(app.screen.raw)                  # RGB888 bytes
+print(app.screen.rgb)                  # numpy (160, 240, 3)
+print(app.screen.ndarray)              # numpy (160, 240, 4) RGBA
+print(app.screen.shape)                # (160, 240, 4)
 ```
 
 鍵盤映射（SDL 視窗）：

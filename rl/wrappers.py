@@ -24,22 +24,38 @@ logger = logging.getLogger("gbaemu.rl")
 
 
 class Screen:
-    """``pygba.screen.Screen`` 的相容視圖。"""
+    """PyBoy 風格畫面 view：``ndarray`` 係 RGBA，``raw`` 係 RGB888 bytes。"""
 
     def __init__(self, emulator: Emulator) -> None:
         self._emu = emulator
 
     @property
     def ndarray(self):
+        """回傳 ``(160, 240, 4)`` 的 ``uint8`` RGBA array（同 PyBoy 一致）。"""
+
+        import numpy as np
+
+        rgb = self._emu.video.read_frame_array()  # (160, 240, 3)
+        rgba = np.empty((rgb.shape[0], rgb.shape[1], 4), dtype=np.uint8)
+        rgba[..., :3] = rgb
+        rgba[..., 3] = 0xFF
+        return rgba
+
+    @property
+    def rgb(self):
+        """回傳 ``(160, 240, 3)`` 的 RGB array（需要 numpy）。"""
+
         return self._emu.video.read_frame_array()
 
     @property
     def raw(self) -> bytes:
+        """回傳 RGB888 bytes（240*160*3，scanline 0 在前）。"""
+
         return self._emu.video.read_frame()
 
     @property
     def shape(self) -> tuple[int, int, int]:
-        return (160, 240, 3)
+        return (160, 240, 4)
 
 
 class GbaApp:
@@ -107,6 +123,52 @@ class GbaApp:
         self._scale = scale
         self._window = self._init_window(window, scale)
         logger.info("GbaApp started: %s (%s)", self.title or "(no title)", path)
+
+    # -- 低層 view 的 forwarding（PyBoy 風格單一入口） ------------------
+    @property
+    def frame_count(self) -> int:
+        """已 tick 嘅 frame 數（PyBoy 嘅 ``frame_count`` 等價）。"""
+
+        return self.frames
+
+    @property
+    def video(self):
+        """``app.emu.video`` 的 shortcut。"""
+
+        return self._emu.video
+
+    @property
+    def memory(self):
+        """``app.emu.memory`` 的 shortcut。"""
+
+        return self._emu.memory
+
+    @property
+    def cpu(self):
+        """``app.emu.cpu`` 的 shortcut。"""
+
+        return self._emu.cpu
+
+    @property
+    def input(self):
+        """``app.emu.input`` 的 shortcut。"""
+
+        return self._emu.input
+
+    @property
+    def audio(self):
+        """``app.emu.audio`` 的 shortcut。"""
+
+        return self._emu.audio
+
+    @property
+    def events(self):
+        """``app.emu.events`` 的 shortcut（Rust backend 唔支援）。"""
+
+        events = getattr(self._emu, "events", None)
+        if events is None:
+            raise AttributeError("NativeEmulator 不提供 events；請用 Python backend")
+        return events
 
     # -- backend 選擇 ----------------------------------------------------
     def _make_backend(self, path, config):
